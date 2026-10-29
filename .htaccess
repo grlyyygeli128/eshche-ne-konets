@@ -1,0 +1,27 @@
+# ЕЩЁ НЕ КОНЕЦ — настройки для хостинга на Apache (большинство обычных хостингов)
+# Правильные типы файлов
+AddType text/javascript .js .mjs
+AddType image/webp .webp
+AddType video/mp4 .mp4
+AddType application/json .json
+AddType text/plain .obj
+
+# Сжатие текста (код и 3D-модели становятся в 3–4 раза легче при передаче)
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json text/plain
+</IfModule>
+
+# Кэш: текстуры, видео и библиотека грузятся один раз, при повторном заходе — мгновенно
+<IfModule mod_headers.c>
+  <FilesMatch "\.(jpg|jpeg|png|webp|mp4|obj|json)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+  <FilesMatch "\.(js|css)$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  # разрешить встраивание комнаты в страницы сайта
+  Header unset X-Frame-Options
+</IfModule>

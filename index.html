@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ещё не конец</title>
+<meta name="description" content="ЕЩЁ НЕ КОНЕЦ — независимое издание об индустрии современного искусства в России. Комната.">
+<meta name="theme-color" content="#141412">
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta property="og:title" content="Ещё не конец">
+<meta property="og:description" content="Комната с открытым окном. Независимое издание об индустрии современного искусства в России.">
+<meta property="og:image" content="og.jpg">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c" tabindex="0" aria-label="3D-сцена: комната с листами бумаги на стенах, стул с рулоном бумаги и открытое окно"></canvas>
+<canvas id="ptfade" aria-hidden="true"></canvas>
+
+<!-- the one piece of interface: a small liquid-glass island; drag it to any edge or corner, push it into a corner to fold it to a dot -->
+<div class="isle glass" id="isle" data-dock="b">
+  <div class="isle-bar" id="isleBar" role="toolbar" aria-label="Меню">
+    <button type="button" class="ib" data-sec="mode" aria-label="Режим: лайв или фото">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.2" class="ln"/><path d="M12 4.8a7.2 7.2 0 0 1 0 14.4z" class="fl" id="modeHalf"/><circle cx="12" cy="12" r="10.4" class="ring" id="ptRing" pathLength="1"/></svg>
+    </button>
+    <button type="button" class="ib" data-sec="views" aria-label="Ракурсы">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15" class="ln"/><circle cx="12" cy="12" r="2.2" class="fl"/></svg>
+    </button>
+    <button type="button" class="ib" data-sec="films" aria-label="Фильмы">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.6" y="5.6" width="16.8" height="12.8" rx="3.4" class="ln"/><path d="M10.4 9.3v5.4l4.6-2.7z" class="fl"/></svg>
+    </button>
+    <button type="button" class="ib" data-sec="scene" aria-label="Сцена">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 8h15M4.5 16h15" class="ln"/><circle cx="9" cy="8" r="2.3" class="kn"/><circle cx="15" cy="16" r="2.3" class="kn"/></svg>
+    </button>
+    <button type="button" class="ib" data-sec="more" aria-label="Ещё">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6" class="fl"/><circle cx="12" cy="12" r="1.6" class="fl"/><circle cx="18" cy="12" r="1.6" class="fl"/></svg>
+    </button>
+    <button type="button" class="ib act" id="bAct" hidden></button>
+  </div>
+  <div class="isle-body" id="isleBody">
+    <section class="sec" data-sec="mode" aria-label="Режим">
+      <div class="seg" id="modeSeg">
+        <button type="button" data-mode="live"><b>Лайв</b><small>Комната живёт</small></button>
+        <button type="button" data-mode="photo"><b>Фото</b><small>Свет как на снимке</small></button>
+      </div>
+    </section>
+    <section class="sec" data-sec="views" aria-label="Ракурсы">
+      <div class="grid" id="shots"></div>
+      <div class="row"><button type="button" class="chip" id="bWalk">Ходить</button><button type="button" class="chip" id="bTour">Автообзор</button></div>
+    </section>
+    <section class="sec" data-sec="films" aria-label="Фильмы">
+      <div class="films" id="films"></div>
+      <div class="row"><button type="button" class="chip wide" id="bReel">Весь кампейн подряд</button></div>
+    </section>
+    <section class="sec" data-sec="scene" aria-label="Сцена">
+      <h3>Окно</h3><div class="row"><button type="button" class="chip" id="bWin"></button><button type="button" class="chip" id="transom">Форточка</button><button type="button" class="chip" id="bTape"></button></div>
+      <h3>Свет и воздух</h3><div class="row"><button type="button" class="chip" id="weather" aria-pressed="false">Солнце</button><button type="button" class="chip" id="lamp" aria-pressed="false">Лампа</button><button type="button" class="chip" id="wind" aria-pressed="true">Сквозняк</button><button type="button" class="chip" id="bGust">Порыв</button></div>
+      <h3>За окном</h3><div class="row" id="wxChips"></div>
+      <h3>События</h3><div class="row"><button type="button" class="chip" id="bStone">Камень</button><button type="button" class="chip" id="bTear">Сорвать листы</button><button type="button" class="chip" id="bReset">Сбросить</button></div>
+    </section>
+    <section class="sec" data-sec="more" aria-label="Ещё">
+      <h3>Звук</h3><div class="row vol"><button type="button" class="chip" id="sound" aria-pressed="true">Звук</button><input id="vol" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Громкость"></div>
+      <h3>Экран</h3><div class="row"><button type="button" class="chip" id="bShot">Снимок</button><button type="button" class="chip" id="bFull">Во весь экран</button><button type="button" class="chip" id="bDot">Свернуть в точку</button></div>
+      <h3>Качество</h3><div class="row" id="qChips"><button type="button" class="chip" data-q="hi">Высокое</button><button type="button" class="chip" data-q="mid">Обычное</button><button type="button" class="chip" data-q="lo">Лёгкое</button></div>
+      <h3>Камера</h3><div class="row vol"><span>Медленно</span><input id="sens" type="range" min="0.4" max="1.8" step="0.05" value="1" aria-label="Скорость камеры"><span>Быстро</span></div>
+      <p class="about">ЕЩЁ НЕ КОНЕЦ — независимое издание об индустрии современного искусства в России. <span id="dims">3,6 × 5,2 × 3,2 м</span></p>
+    </section>
+  </div>
+</div>
+
+<!-- a short note at the far edge while the modes are open -->
+<div class="hint glass" id="hint" aria-live="polite"></div>
+<!-- corner targets shown while the island is dragged -->
+<div class="corners" id="corners" aria-hidden="true"><i data-c="tl"></i><i data-c="tr"></i><i data-c="bl"></i><i data-c="br"></i></div>
+
+<div class="walk" id="walkUI" aria-hidden="true">
+  <div class="joy glass" id="joy"><i></i></div>
+  <div class="hgt glass" id="hgt"><i></i><span id="hgtLbl">1,6 м</span></div>
+</div>
+
+<div class="loader" id="loader">
+  <div class="loadbox glass">
+    <div class="k"><span>Ещё не конец</span><span id="loadn">0%</span></div>
+    <div id="loadmsg">Собираю комнату…</div>
+    <div class="bar"><i id="loadbar"></i></div>
+    <div id="loaditem">&nbsp;</div>
+  </div>
+</div>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/addons/",
+  "three/examples/jsm/": "./vendor/three/addons/",
+  "three-mesh-bvh": "./vendor/bvh/index.js",
+  "three-gpu-pathtracer": "./vendor/gpt/index.js"
+} }
+</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
