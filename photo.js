@@ -16,7 +16,7 @@ export function createPhoto({ renderer, scene, view, makeBokeh, grainShader, max
   const pt = new WebGLPathTracer(renderer);
   Object.assign(pt, { renderToCanvas: false, rasterizeScene: false, renderDelay: 0, minSamples: 1, fadeDuration: 0, dynamicLowRes: false });
   pt.tiles.set(1, 1);
-  pt.bounces = 7; pt.transmissiveBounces = 8; pt.filterGlossyFactor = .35; pt.multipleImportanceSampling = true;
+  pt.bounces = maxPixels > 1.5e6 ? 5 : 3; pt.transmissiveBounces = 3; pt.filterGlossyFactor = .35; pt.multipleImportanceSampling = true;
   pt.textureSize.set(textureSize, textureSize);
 
   /* what the window shows: the room renderer's own sky, drawn alone */
@@ -197,7 +197,9 @@ export function createPhoto({ renderer, scene, view, makeBokeh, grainShader, max
             return (g(x0, y0) * (1 - tx) + g(x0 + 1, y0) * tx) * (1 - ty) + (g(x0, y0 + 1) * (1 - tx) + g(x0 + 1, y0 + 1) * tx) * ty;
           };
           dmap.updateMatrix(); const tm = dmap.matrix.elements;
-          const src = o.geometry, P = src.attributes.position, N = src.attributes.normal, UV = src.attributes.uv;
+          let src = o.geometry;const gp = src.parameters;
+          if (gp && gp.widthSegments > 160) src = new THREE.PlaneGeometry(gp.width, gp.height, 160, Math.round(160 * gp.heightSegments / gp.widthSegments));
+          const P = src.attributes.position, N = src.attributes.normal, UV = src.attributes.uv;
           const g = new THREE.BufferGeometry(); for (const k in src.attributes) if (k !== 'position') g.setAttribute(k, src.attributes[k]);
           if (src.index) g.setIndex(src.index);
           const out = new Float32Array(P.count * 3);
@@ -295,7 +297,7 @@ export function createPhoto({ renderer, scene, view, makeBokeh, grainShader, max
     return hidden;
   }
 
-  const state = { active: false, shown: false, k: 1, kT: 1, cal: [], building: false };
+  const state = { active: false, shown: false, k: 1, kT: 1, cal: [], building: false, scaleK: 1 };
   let bg0 = null, env0 = null;
 
   const TINT = new THREE.Color(.86, .93, 1.0), SKYC = new THREE.Color('#dfe7ee');
@@ -322,7 +324,7 @@ export function createPhoto({ renderer, scene, view, makeBokeh, grainShader, max
     pt.pausePathTracing = false;
     // the room is sampled at no more than ~2.4 million pixels and scaled up
     const sz = renderer.getDrawingBufferSize(new THREE.Vector2());
-    pt.renderScale = Math.min(1, Math.sqrt(maxPixels / (sz.x * sz.y)));
+    pt.renderScale = Math.min(1, Math.sqrt(maxPixels / (sz.x * sz.y))) * state.scaleK;
     state.active = true; state.shown = false; state.depthDone = false; state.cal = [6, 24, 96]; state.k = state.kT = 1;
     onProgress(0);
   }
@@ -371,11 +373,16 @@ export function createPhoto({ renderer, scene, view, makeBokeh, grainShader, max
     onProgress(Math.min(1, n / maxSamples));
     return true;
   }
+  // a slow GPU: fewer traced pixels (scaled up), then the frame in tiles so the page stays responsive
+  function degrade() {
+    if (state.scaleK > .4) { state.scaleK *= .75; pt.renderScale *= .75; pt.reset(); state.cal = [6, 24]; }
+    else if (pt.tiles.x < 2) pt.tiles.set(2, 2);
+  }
   function setSize(w, h) { comp.setSize(w, h); state.depthDone = false; }
   function setBokeh(on) { if (bokeh) bokeh.enabled = on; }
 
   return {
-    pt, start, stop, step, setSize, setBokeh,
+    pt, start, stop, step, setSize, setBokeh, degrade, kind: 'pt',
     prewarm, get ready() { return state.active && !state.shown && pt.samples >= 5; },
     get active() { return state.active; }, get shown() { return state.shown; }, get samples() { return pt.samples; },
     get compiling() { return pt.isCompiling; },

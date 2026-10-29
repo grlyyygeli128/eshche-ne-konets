@@ -9,6 +9,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { mergeVertices, mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /* ---------- contact-hardening soft shadows ---------- */
@@ -471,7 +472,7 @@ async function build(){
     if(M.determinant()<0){for(const k of ['position','normal','uv']){const a=g2.attributes[k];if(!a)continue;const it=a.itemSize,arr=a.array;
       for(let t=0;t<arr.length;t+=3*it)for(let c=0;c<it;c++){const x=arr[t+it+c];arr[t+it+c]=arr[t+2*it+c];arr[t+2*it+c]=x}}}
     g2.computeBoundingBox();return g2};
-  const addPart=(geo,mat,parent,lfw)=>{const m=new THREE.Mesh(placed(geo,lfw),mat);m.castShadow=mat!==glass;m.receiveShadow=true;parent.add(m);return m};
+  const addPart=(geo,mat,parent,lfw)=>{const m=new THREE.Mesh(placed(geo,lfw),mat);m.castShadow=mat!==glass;m.receiveShadow=true;if(mat===glass)m.userData.noDepth=true;parent.add(m);return m};
   const paneOf=(m,parent)=>{const b=m.geometry.boundingBox;return {m,g:parent,cx:(b.min.x+b.max.x)/2,cy:(b.min.y+b.max.y)/2,cz:(b.min.z+b.max.z)/2,w:b.max.x-b.min.x,h:b.max.y-b.min.y}};
   const ALLPANES=[];
   let fr0=null;if(parts.win1){const fr=new THREE.Group();fr0=fr;scene.add(fr);addPart(parts.win1.window_1,winMat,fr,new THREE.Matrix4());
@@ -703,15 +704,18 @@ async function build(){
         for(const n of Object.keys(WXWIND)){const L=startLoop(ctx,loop(n),99,AU.lp);AU.src[n]=L.s;AU.g[n]=L.g}
         AU.bed.city=startLoop(ctx,loop('city'),99,AU.lp);AU.bed.birds=startLoop(ctx,loop('birds'),99,AU.lp);AU.buf.open=cut('open');AU.buf.gust=cut('gust');AU.pad=pad}).catch(e=>console.warn('sound',e));
       // the room's own sounds, decoded ahead so each plays the instant its event happens: glass, the stone, paper in the draught
-      for(const n of ['glass','stone','knock'])loadBuf(ctx,'tex/sfx/'+n+'.wav').then(b=>{AU.buf[n]=b}).catch(e=>console.warn('sound',n,e));
+      for(const n of ['glass','stone','knock','bang','creak'])loadBuf(ctx,'tex/sfx/'+n+'.wav').then(b=>{AU.buf[n]=b}).catch(e=>console.warn('sound',n,e));
       loadBuf(ctx,'tex/sfx/paper.m4a').then(b=>{const sr=b.sampleRate,nc=b.numberOfChannels,X=Math.round(3*sr),N=b.length-X,o=ctx.createBuffer(nc,N,sr);
         for(let c=0;c<nc;c++){const src=b.getChannelData(c),d=o.getChannelData(c);d.set(src.subarray(0,N));for(let i=0;i<X;i++){const t=(i+.5)/X*Math.PI/2;d[i]=src[i]*Math.sin(t)+src[N+i]*Math.cos(t)}}
         AU.bed.paper=startLoop(ctx,o,99,AU.inner)}).catch(e=>console.warn('sound paper',e))}}
   // one-off sounds: the window's catch and hinges (in the room), a gust (from outside)
-  function sfx(name,vol,outside,delay,rate){if(!AU.ctx||!AU.on||!AU.buf[name])return;const s=AU.ctx.createBufferSource(),g=AU.ctx.createGain();s.buffer=AU.buf[name];if(rate)s.playbackRate.value=rate;g.gain.value=vol;s.connect(g);g.connect(outside?AU.lp:AU.inner);s.start(AU.ctx.currentTime+(delay||0))}
+  function sfx(name,vol,outside,delay,rate){if(!AU.ctx||!AU.on||AU.mute||!AU.buf[name])return;const s=AU.ctx.createBufferSource(),g=AU.ctx.createGain();s.buffer=AU.buf[name];if(rate)s.playbackRate.value=rate;g.gain.value=vol;s.connect(g);g.connect(outside?AU.lp:AU.inner);s.start(AU.ctx.currentTime+(delay||0))}
   // the story's sounds land on the frame of their event; in a film's slow motion they are slowed with it
   const sRate=()=>typeof DIR!=='undefined'&&DIR.on&&DIR.ws<.9?Math.max(.62,.5+DIR.ws):1;
   window.addEventListener('glass',()=>sfx('glass',1,false,0,sRate()));
+  // a casement slamming against the wall (or shut on its frame): the harder, the louder; never a rattle of copies
+  let lastBang=0;window.addEventListener('bang',e=>{const now=performance.now();if(now-lastBang<110)return;lastBang=now;const s=e.detail?e.detail.strength:1;
+    sfx('bang',Math.min(1,.18+s*.2),false,0,sRate()*(.92+Math.random()*.16))});
   window.addEventListener('stoneland',e=>{if(!AU.landed){AU.landed=true;sfx('stone',Math.min(1,.35+(e.detail?e.detail.v:5)/9),false,0,sRate())}});
   window.addEventListener('knock',e=>{if(e.detail&&e.detail.roll)sfx('knock',.32,false,0,.72*sRate());else sfx('knock',.85,false,0,sRate())});
   for(const ev of ['pointerdown','touchend','keydown','click'])window.addEventListener(ev,()=>{if(AU.on)audioStart()},{capture:true,passive:true});
@@ -1596,9 +1600,11 @@ async function build(){
   try{await Promise.race([document.fonts.load('700 196px Arimo'),new Promise(r=>setTimeout(r,1500))])}catch(e){}
   const noteC=canvas(1024,732),nx=noteC.getContext('2d');nx.drawImage(tPaper,0,0,1024,732);
   nx.fillStyle='rgba(255,255,255,.25)';nx.fillRect(0,0,1024,732);
-  nx.fillStyle='#141412';nx.font='700 196px "Helvetica Neue", Helvetica, Arimo, Arial, sans-serif';nx.textBaseline='alphabetic';
-  if('letterSpacing' in nx)nx.letterSpacing='-6px';
-  nx.fillText('ЕЩЁ',58,236);nx.fillText('НЕ',58,436);nx.fillText('КОНЕЦ',58,636);   // printed the right way round on the face that shows it
+  // the publication's hand-painted logo, printed on the face that shows it (typed words if the picture cannot be had)
+  const logo=await new Promise(r=>{const im=new Image();im.onload=()=>r(im);im.onerror=()=>r(null);im.src='tex/logo.png'});
+  if(logo){const H=640,W=H*logo.width/logo.height;nx.globalAlpha=.94;nx.drawImage(logo,(1024-W)/2,(732-H)/2,W,H);nx.globalAlpha=1}
+  else{nx.fillStyle='#141412';nx.font='700 196px "Helvetica Neue", Helvetica, Arimo, Arial, sans-serif';nx.textBaseline='alphabetic';
+    if('letterSpacing' in nx)nx.letterSpacing='-6px';nx.fillText('ЕЩЁ',58,236);nx.fillText('НЕ',58,436);nx.fillText('КОНЕЦ',58,636)}
   const NW=.42,NH=.30,noteMat=new THREE.MeshStandardMaterial({map:tex(noteC,{srgb:true}),roughness:.9,side:THREE.DoubleSide});
   noteMat.onBeforeCompile=sh=>{sh.uniforms.uFace={value:NB.uFace||1};noteMat.userData.sh=sh;sh.fragmentShader=sh.fragmentShader.replace('#include <common>','#include <common>\nuniform float uFace;').replace('#include <map_fragment>',
     `vec4 sampledDiffuseColor=(gl_FrontFacing==(uFace>0.))?texture2D(map,vMapUv):vec4(vec3(.93,.925,.9)*(.97+.03*texture2D(map,vMapUv*.13+.81).g),1.);diffuseColor*=sampledDiffuseColor;`)};
@@ -2227,7 +2233,7 @@ async function build(){
   /* per-frame simulation */
   let pendingDetach=[];
   function openWindow(){
-    if(!S.taped)return;S.taped=false;sfx('open',.9,false);sfx('gust',.8,true,.35);
+    if(!S.taped)return;S.taped=false;sfx('open',.9,false);sfx('creak',.55,false,.05);sfx('gust',.8,true,.35);
     for(const l of leaves)l.om=2.6+simRand()*1.2;
     S.gust=2.8;S.shake=1;
     const near=sheets.filter(s=>!s.hidden).sort((a,b)=>b.prox-a.prox).slice(0,42);
@@ -2303,7 +2309,7 @@ async function build(){
   const storyState=()=>({t:S.storyT,p:STB.p,v:STB.v,hit:!!ST.hit,broke:!!ST.broke,contact:!!ST.contact,active:!!ST.active,roll:RS.ph,landed:!!RS.landed,rollP:RLB.p,chair:CH.p,note:NB.on,noteC:NB.c,lamp:lampG.position});window.__story=storyState;
   document.getElementById('dims').textContent=`3,6 × 5,2 × 3,2 м · ${sheets.length+floorInit.length} листов A3`;
   resetWorld(false);setWeather(false);placeSheets();storyInit();storyPose();
-  return {storyState,soundOn:on=>{AU.on=on;if(on)audioStart()},setVol:v=>{AU.vol=v},lampOn:()=>lamp.on,
+  return {storyState,fastForward:T=>{AU.mute=true;try{for(let i=0,n=Math.round(T*60);i<n;i++)stepWorld(1/60)}finally{AU.mute=false}},soundOn:on=>{AU.on=on;if(on)audioStart()},setVol:v=>{AU.vol=v},lampOn:()=>lamp.on,
     wxReady:()=>WX_FRAMES?skyU.tA0.value!==BLANK:!!WX.ready[0],wxPick:n=>{WX.lock=n||null;if(WX.fade<0){cue(1-WX.slot,WX.i+1);WX.pend=true}else WX.pendAfter=true},wxLock:()=>WX.lock,wxNow:()=>{const c=WX.clip[skyU.uMix.value>.5?1:0];return c?c.n:'calm'},
     wxSeek,wxApply:()=>WXB.apply(),captureEnv,step:stepWorld,setWeather,openWindow,tearOne,tearFive,gust,resetWorld,leafA,flyers,setLamp,throwStone:()=>{AU.landed=false;storyInit();launch(THROW);S.storyT=0;S.breakPending=(S.taped||S.latched)&&S.trClosed&&!!transom.pane&&transom.pane.m.visible&&leafB.th<.1},resetStory:()=>{S.storyT=-1;S.breakPending=false;storyInit();storyPose()},prepStory:close=>{clearShards();S.storyT=-1;S.breakPending=false;storyInit();storyPose();if(close&&!S.taped){S.latched=true;S.trClosed=true;setLeaves(false);for(const l of leaves){l.tp.visible=false}}},latch:()=>{if(!S.latched)sfx('open',.65,false);S.latched=true},unlatch:()=>{if(S.latched){sfx('open',.9,false);sfx('gust',.7,true,.6)}S.latched=false;for(const l of leaves)l.om=1.6+simRand()},setTransom:c=>{S.trClosed=c;if(!c)transom.om=2}};
 }
@@ -2375,46 +2381,59 @@ const v3=(x,y,z)=>new THREE.Vector3(x,y,z);
 const EASE={io:t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,o:t=>1-Math.pow(1-t,3),i:t=>t*t*t,s:t=>t*t*(3-2*t),l:t=>t};
 const fbase=w=>{w.resetWorld(false);w.resetStory();S.windOn=true;if(S.sunny)w.setWeather(false);if(w.lampOn())w.setLamp(false);w.wxPick(null)};
 // shot: t:[start,end], a/b: [position, target, fov]; e: easing of the move; track: follow the stone with weight tw
-const fsh=(t0,t1,a,b,o={})=>({t:[t0,t1],a:[v3(...a[0]),v3(...a[1]),a[2]],b:[v3(...(b||a)[0]),v3(...(b||a)[1]),(b||a)[2]],e:o.e||'s',track:o.track,tw:o.tw||0});
+const fsh=(t0,t1,a,b,o={})=>({t:[t0,t1],a:[v3(...a[0]),v3(...a[1]),a[2]],b:[v3(...(b||a)[0]),v3(...(b||a)[1]),(b||a)[2]],e:o.e||'s',track:o.track,tw:o.tw||0,roll:o.roll||[0,0]});
 // a one-take move through key poses (Catmull-Rom)
 const take=(t0,t1,keys,o={})=>({t:[t0,t1],keys:keys.map(k=>({u:k[0],p:v3(...k[1]),g:v3(...k[2]),f:k[3]})),e:o.e||'s'});
 const FILMS=[
-  {id:'stone',name:'Камень',sub:'Окно, полёт, удар, записка',end:13.2,
+  {id:'stone',name:'Камень',sub:'Окно, полёт, удар, лого',end:13.6,
     setup:w=>{fbase(w);w.prepStory(true)},
     ev:[[1.4,w=>w.throwStone()]],
     slow:[[1.47,1.82,.22],[1.82,2.62,.38]],
     shots:[
-      fsh(0,1.55,[[-.55,.95,2.35],[1.6,1.55,-1.6],40],[[-.47,.96,2.18],[1.6,1.56,-1.6],38]),
+      fsh(0,1.55,[[-.55,.95,2.35],[1.6,1.55,-1.6],40],[[-.42,.97,2.12],[1.6,1.56,-1.6],34],{roll:[.05,.0]}),
       fsh(1.55,2.0,[[.95,1.5,-.55],[1.78,1.9,-1.42],32],[[.9,1.48,-.5],[1.6,1.7,-1.25],34],{track:'stone',tw:.35}),
-      fsh(2.0,2.5,[[1.3,.32,1.95],[.4,.3,.2],36],[[1.25,.3,1.95],[-.9,.15,1.4],38],{track:'stone',tw:.95}),
-      fsh(2.5,4.5,[[-.62,.09,1.05],[-1.25,.14,1.76],40],[[-.69,.1,1.13],[-1.27,.12,1.74],38]),
-      fsh(4.5,8.3,[[-1.66,1.32,1.36],[-1.44,.02,1.48],42],[[-1.64,.86,1.42],[-1.44,.01,1.47],38],{e:'o'}),
-      fsh(8.3,13.2,[[-1.63,.62,1.5],[-1.43,.01,1.47],40],[[-1.6,.5,1.49],[-1.43,.01,1.47],35],{e:'io'})]},
+      fsh(2.0,2.5,[[1.3,.32,1.95],[.4,.3,.2],36],[[1.25,.3,1.95],[-.9,.15,1.4],38],{track:'stone',tw:.95,roll:[-.14,-.08]}),
+      fsh(2.5,4.5,[[-.62,.09,1.05],[-1.25,.14,1.76],40],[[-.69,.1,1.13],[-1.27,.12,1.74],38],{roll:[.06,.02]}),
+      fsh(4.5,8.3,[[-1.66,1.32,1.36],[-1.44,.02,1.48],42],[[-1.64,.86,1.42],[-1.44,.01,1.47],38],{e:'o',roll:[.05,.36]}),
+      fsh(8.3,13.6,[[-1.63,.62,1.5],[-1.43,.01,1.47],40],[[-1.6,.48,1.49],[-1.43,.01,1.47],34],{e:'io',roll:[.42,.36]})]},
   {id:'window',name:'Окно',sub:'Скотч сорван, ветер в лицо',end:12.4,
     setup:w=>{fbase(w);w.resetWorld(true)},
     ev:[[2.4,w=>w.openWindow()]],
     slow:[[2.42,3.1,.4]],
     shots:[
       fsh(0,2.42,[[1.0,1.6,-1.64],[1.95,1.47,-1.75],30],[[1.13,1.58,-1.7],[1.95,1.47,-1.75],25]),
-      // the tape goes and the draught hits the lens: the camera is thrown back into the room, the leaves fly at it
-      fsh(2.42,4.4,[[1.15,1.58,-1.71],[1.95,1.47,-1.75],25],[[.35,1.62,-1.45],[1.9,1.66,-1.75],44],{e:'o'}),
-      fsh(4.4,7.6,[[-.72,1.25,.62],[1.6,1.55,-1.7],44],[[-.46,1.3,.3],[1.6,1.56,-1.72],42],{e:'o'}),
+      fsh(2.42,4.4,[[1.15,1.58,-1.71],[1.95,1.47,-1.75],25],[[.35,1.62,-1.45],[1.9,1.66,-1.75],44],{e:'o',roll:[0,.12]}),
+      fsh(4.4,7.6,[[-.72,1.25,.62],[1.6,1.55,-1.7],44],[[-.46,1.3,.3],[1.6,1.56,-1.72],42],{e:'o',roll:[.08,0]}),
       fsh(7.6,12.4,[[.55,1.55,-.85],[1.8,1.6,-1.75],50],[[1.44,1.6,-1.71],[4.5,1.45,-2.3],62],{e:'io'})]},
-  {id:'sheets',name:'Листы',sub:'Пять листов срывает со стены',end:12.6,
-    setup:w=>{fbase(w)},
-    ev:[[2.2,w=>w.tearFive()],[6.3,w=>w.gust()]],
-    slow:[[2.35,3.4,.45]],
+  {id:'roll',name:'Рулон',sub:'Бумага через всю комнату',end:13.5,
+    // the aftermath: the story already played out, the roll lies unrolled across the floor
+    setup:w=>{fbase(w);w.prepStory(true);w.throwStone();w.fastForward(11)},
     shots:[
-      fsh(0,2.45,[[-1.45,1.75,-2.24],[.8,1.55,-2.58],30],[[-1.18,1.72,-2.24],[1.0,1.5,-2.58],30]),
-      fsh(2.45,6.1,[[-.95,1.0,-1.15],[.55,1.75,-2.6],46],[[-.85,1.05,-.95],[.6,1.65,-2.6],48],{e:'o'}),
-      fsh(6.1,9.6,[[0,.16,-.55],[.7,.05,-2.3],50],[[.15,.14,-.78],[.72,.05,-2.32],48]),
-      fsh(9.6,12.6,[[.25,2.72,-1.02],[.26,0,-1.78],56],[[.22,2.6,-1.2],[.24,0,-1.85],52])]},
+      fsh(0,4.6,[[1.55,.15,-1.98],[-1.1,.16,1.8],40],[[.95,.12,-1.05],[-1.1,.18,1.8],34],{e:'l',roll:[.04,0]}),
+      fsh(4.6,8.8,[[.2,2.75,.05],[.21,0,.04],64],[[.2,2.55,.05],[.21,0,.04],58],{e:'io',roll:[-.55,.15]}),
+      fsh(8.8,13.5,[[.3,.17,2.4],[-1.15,.2,1.72],36],[[.1,.19,2.42],[-1.2,.2,1.7],32],{e:'io'})]},
+  {id:'floor',name:'Пол',sub:'Доски, свет, скользящие листы',end:12.6,
+    setup:w=>{fbase(w)},
+    ev:[[2.2,w=>w.gust()],[6.6,w=>w.gust()]],
+    shots:[
+      fsh(0,4.2,[[1.2,.05,-.15],[.9,.02,-2.3],34],[[.62,.05,-.42],[.95,.02,-2.35],32],{e:'l',roll:[.08,.03]}),
+      fsh(4.2,8.4,[[.1,.03,-.88],[.5,.02,-2.2],30],[[.14,.035,-.95],[.5,.02,-2.2],28]),
+      fsh(8.4,12.6,[[.4,2.7,-1.2],[.41,0,-1.21],52],[[.4,2.55,-1.25],[.41,0,-1.26],48],{e:'io',roll:[.25,-.1]})]},
+  {id:'sheets',name:'Листы',sub:'Пять листов срывает со стены',end:12.8,
+    setup:w=>{fbase(w)},
+    ev:[[2.4,w=>w.tearFive()],[6.6,w=>w.gust()]],
+    slow:[[2.5,3.6,.45]],
+    shots:[
+      take(0,2.6,[[0,[-1.25,1.62,-1.55],[-.4,1.6,-2.6],34],[1,[-.3,1.55,-1.55],[.6,1.55,-2.6],34]],{e:'l'}),
+      fsh(2.6,6.4,[[.2,.4,-1.2],[.2,1.9,-2.5],50],[[.1,.38,-1.0],[.15,1.95,-2.5],54],{e:'o',roll:[-.12,-.04]}),
+      fsh(6.4,9.8,[[0,.16,-.55],[.7,.05,-2.3],50],[[.15,.14,-.78],[.72,.05,-2.32],48]),
+      fsh(9.8,12.8,[[.25,2.72,-1.02],[.26,0,-1.78],56],[[.22,2.6,-1.2],[.24,0,-1.85],52],{roll:[-.2,.05]})]},
   {id:'wind',name:'Сквозняк',sub:'Лампа, листы, пол',end:11.6,
     setup:w=>{fbase(w)},
     ev:[[1.0,w=>w.gust()],[5.0,w=>w.gust()],[8.6,w=>w.gust()]],
     shots:[
-      fsh(0,3.3,[[-.78,1.68,.08],[-.33,1.9,-.54],30],[[-.72,1.66,.02],[-.33,1.9,-.54],27]),
-      fsh(3.3,7.2,[[.6,1.45,-1.3],[-.8,1.55,-2.58],38],[[.5,1.48,-1.4],[-.6,1.55,-2.58],36]),
+      fsh(0,3.3,[[-.78,1.68,.08],[-.33,1.9,-.54],30],[[-.72,1.66,.02],[-.33,1.9,-.54],27],{roll:[.18,.1]}),
+      fsh(3.3,7.2,[[.6,1.45,-1.3],[-.8,1.55,-2.58],38],[[.5,1.48,-1.4],[-.6,1.55,-2.58],36],{roll:[-.06,-.1]}),
       fsh(7.2,11.6,[[.05,.2,-.6],[.65,.06,-2.45],48],[[0,.22,-.4],[.62,.06,-2.45],48])]},
   {id:'light',name:'Свет',sub:'Солнце в окне, лампа',end:12.4,
     setup:w=>{fbase(w)},
@@ -2422,15 +2441,8 @@ const FILMS=[
     after:w=>{w.setLamp(false);w.captureEnv()},
     shots:[
       fsh(0,4.2,[[-1.25,1.45,1.6],[1.2,.55,-1.4],46],[[-1.1,1.4,1.3],[1.2,.55,-1.42],44]),
-      fsh(4.2,7.3,[[.5,1.15,-.3],[1.6,1.6,-1.6],34],[[.6,1.2,-.45],[1.62,1.6,-1.62],32]),
+      fsh(4.2,7.3,[[.5,1.15,-.3],[1.6,1.6,-1.6],34],[[.6,1.2,-.45],[1.62,1.6,-1.62],32],{roll:[0,.06]}),
       fsh(7.3,12.4,[[-1.05,1.35,.55],[-.33,1.95,-.54],34],[[-.9,1.4,.36],[-.33,1.95,-.54],30],{e:'o'})]},
-  {id:'weather',name:'За окном',sub:'Ясно, дождь, гроза',end:17,
-    setup:w=>{fbase(w);w.wxPick('calm')},
-    ev:[[3,w=>w.wxPick('rain')],[10,w=>w.wxPick('storm')]],
-    after:w=>w.wxPick(null),
-    shots:[
-      fsh(0,9,[[.45,1.45,-1.0],[2.6,1.65,-1.95],44],[[.82,1.47,-1.18],[2.6,1.64,-1.95],42]),
-      fsh(9,17,[[.95,1.55,-1.3],[3.0,1.55,-1.9],50],[[1.1,1.56,-1.42],[3.0,1.55,-1.9],52])]},
   {id:'room',name:'Комната',sub:'Одним планом, тизер',end:17,
     setup:w=>{fbase(w)},
     shots:[take(0,17,[
@@ -2464,7 +2476,7 @@ function dirStep(dt){const f=DIR.f;
   const fov=filmPose(s,Math.min(1,Math.max(0,(st-s.t[0])/(s.t[1]-s.t[0]))));
   if(s.track==='stone'){const p=world.storyState().p;_dg.lerp(p,s.tw)}
   if(k!==DIR.shot){DIR.shot=k;DIR.ts.copy(_dg)}else DIR.ts.lerp(_dg,1-Math.exp(-dt*9));
-  camera.position.copy(_dp);const a=window.innerWidth/window.innerHeight;camera.fov=a<.85?fov*1.3:fov;camera.updateProjectionMatrix();camera.lookAt(DIR.ts);controls.target.copy(DIR.ts);
+  camera.position.copy(_dp);const a=window.innerWidth/window.innerHeight;camera.fov=a<.85?fov*1.3:fov;camera.updateProjectionMatrix();camera.lookAt(DIR.ts);{const r=s.roll||[0,0],u=Math.min(1,Math.max(0,(st-s.t[0])/(s.t[1]-s.t[0]))),e=EASE[s.e](u);camera.rotateZ(r[0]+(r[1]-r[0])*e)}controls.target.copy(DIR.ts);
   if(st>=f.end){DIR.phase='out';DIR.wait=.75;filmFade(true,650)}
   return ws}
 
@@ -2479,13 +2491,53 @@ function photoFade(){const c=document.getElementById('ptfade');if(!c)return;cons
   if(c.width!==src.width||c.height!==src.height){c.width=src.width;c.height=src.height}
   c.getContext('2d').drawImage(src,0,0);c.style.transition='none';c.style.opacity='1';
   requestAnimationFrame(()=>requestAnimationFrame(()=>{c.style.transition='opacity 1.4s ease';c.style.opacity='0'}))}
+/* the photo on every device: where the GPU cannot path-trace (phones, small laptops, or a trace that failed),
+   the frame is still developed — the live renderer is run again and again with the camera shifted by a fraction of a
+   pixel and the window light, the sun and the lamp moved across their real size, and the frames are averaged:
+   soft area shadows, clean edges and clean shading, from shaders every device already runs. */
+function makeAccum(){
+  const VS=`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`;
+  const mk=()=>new THREE.WebGLRenderTarget(4,4,{type:THREE.HalfFloatType,depthBuffer:false});let A=mk(),B=mk();
+  const blend=new FullScreenQuad(new THREE.ShaderMaterial({uniforms:{tNew:{value:null},tAcc:{value:null},k:{value:1}},vertexShader:VS,
+    fragmentShader:`uniform sampler2D tNew,tAcc;uniform float k;varying vec2 vUv;void main(){gl_FragColor=mix(texture2D(tAcc,vUv),texture2D(tNew,vUv),k);}`}));
+  const show=new FullScreenQuad(new THREE.ShaderMaterial({uniforms:THREE.UniformsUtils.clone(GrainShader.uniforms),vertexShader:GrainShader.vertexShader,fragmentShader:GrainShader.fragmentShader}));
+  const st={active:false,shown:false,n:0,N:/Mobi|Android|iP(hone|ad)/i.test(navigator.userAgent)?40:64,base:null};
+  const H=(i,b)=>{let f=1,r=0;while(i>0){f/=b;r+=f*(i%b);i=Math.floor(i/b)}return r};
+  const sz=new THREE.Vector2();
+  function jitterLights(i){const L=window.__lights;if(!L)return;if(!st.base)st.base=['sun','skyA','winSpot'].map(k=>[L[k],L[k].position.clone()]);
+    const a=H(i+1,2),b=H(i+1,3),c=H(i+1,5);
+    for(const [l,p] of st.base){l.position.copy(p);
+      if(l===L.winSpot){l.position.z+=(a-.5)*1.1;l.position.y+=(b-.5)*1.1}          // the whole window opening as the source
+      else{const k=l===L.sun?.22:.9;l.position.x+=(a-.5)*k;l.position.y+=(b-.5)*k;l.position.z+=(c-.5)*k}}}
+  function restore(){if(st.base)for(const [l,p] of st.base)l.position.copy(p)}
+  return {kind:'acc',
+    start(){st.active=true;st.shown=false;st.n=0;grain.enabled=false;composer.renderToScreen=false;PHOTO.progress&&PHOTO.progress(0)},
+    stop(){if(!st.active)return;st.active=false;st.shown=false;restore();view.clearViewOffset();grain.enabled=true;composer.renderToScreen=true;PHOTO.progress&&PHOTO.progress(-1)},
+    step({time}){if(!st.active)return false;renderer.getDrawingBufferSize(sz);
+      if(A.width!==sz.x||A.height!==sz.y){A.setSize(sz.x,sz.y);B.setSize(sz.x,sz.y);st.n=0}
+      if(st.n<st.N){const w=sz.x,h=sz.y;view.setViewOffset(w,h,H(st.n+1,2)-.5,H(st.n+1,3)-.5,w,h);jitterLights(st.n);composer.render();
+        const prev=renderer.getRenderTarget();blend.material.uniforms.tNew.value=composer.readBuffer.texture;blend.material.uniforms.tAcc.value=A.texture;blend.material.uniforms.k.value=1/(st.n+1);
+        renderer.setRenderTarget(B);blend.render(renderer);renderer.setRenderTarget(prev);[A,B]=[B,A];st.n++;PHOTO.progress&&PHOTO.progress(st.n/st.N)}
+      show.material.uniforms.tDiffuse.value=A.texture;show.material.uniforms.uTime.value=time;renderer.setRenderTarget(null);show.render(renderer);st.shown=true;return true},
+    setSize(){},setBokeh(){},prewarm(){},
+    get active(){return st.active},get shown(){return st.shown},get ready(){return st.active&&!st.shown},get samples(){return st.n},get compiling(){return false}}}
 function photoLoad(){if(PHOTO.loading)return PHOTO.loading;
-  PHOTO.loading=import('./photo.js').then(m=>{PHOTO.ctl=m.createPhoto({renderer,scene,view,grainShader:GrainShader,textureSize:HQ?2048:1024,
-      makeBokeh:()=>{const b=new BokehPass(scene,view,{focus:2,aperture:.0016,maxblur:.007});b.materialBokeh.fragmentShader=DOF_FS;b.materialBokeh.needsUpdate=true;b.enabled=bokeh?bokeh.enabled:true;return b},
+  // a real path trace only where it can run comfortably: a computer with a capable GPU, and not one that failed before
+  const ptOK=PHOTO.can()&&(HQ||params.has('pt'))&&(()=>{try{return localStorage.getItem('room.ptfail')!=='1'}catch(e){return true}})()&&!params.has('acc');
+  if(!ptOK){PHOTO.ctl=makeAccum();PHOTO.kind='acc';return PHOTO.loading=Promise.resolve(PHOTO.ctl)}
+  PHOTO.kind='pt';
+  PHOTO.loading=import('./photo.js?v=41').then(m=>{PHOTO.ctl=m.createPhoto({renderer,scene,view,grainShader:GrainShader,textureSize:HQ?2048:1024,
+      makeBokeh:()=>{const b=new BokehPass(scene,view,{focus:2,aperture:.0016,maxblur:.007});b.materialBokeh.fragmentShader=DOF_FS;b.materialBokeh.needsUpdate=true;b.enabled=bokeh?bokeh.enabled:true;return noGlassDepth(b)},
       maxPixels:HQ?2.4e6:7e5,onProgress:v=>{PHOTO.progress&&PHOTO.progress(v)}});
     PHOTO.ctl.setSize(window.innerWidth,window.innerHeight);return PHOTO.ctl})
-    .catch(e=>{console.warn('photo light unavailable',e);PHOTO.failed=true;return null});
+    .catch(e=>{console.warn('photo light: path tracing unavailable, using the developed frame instead',e);PHOTO.kind='acc';PHOTO.ctl=makeAccum();return PHOTO.ctl});
   return PHOTO.loading}
+
+/* glass is see-through: it must not count as a near surface for the depth of field, or the view through a pane
+   is blurred and the open part of the window is not — a visible seam. Panes and floor decals leave the depth pass. */
+function noGlassDepth(pass){const r=pass.render.bind(pass);pass.render=(...a)=>{const hid=[];
+  scene.traverseVisible(o=>{if(o.isMesh&&!Array.isArray(o.material)&&(o.userData.noDepth||(o.material.transparent&&!o.material.depthWrite))){o.visible=false;hid.push(o)}});
+  try{r(...a)}finally{for(const o of hid)o.visible=true}};return pass}
 
 /* ---------- boot ---------- */
 let composer,gtao,grain,world,bokeh;
@@ -2576,7 +2628,7 @@ build().then(async w=>{
   gtao.updatePdMaterial({lumaPhi:10,depthPhi:4,normalPhi:4,radius:4,rings:2,samples:16});
   gtao.blendIntensity=.88;
   if(!params.has('noao'))composer.addPass(gtao);
-  bokeh=new BokehPass(scene,view,{focus:2,aperture:.0016,maxblur:.007});bokeh.materialBokeh.fragmentShader=DOF_FS;bokeh.materialBokeh.needsUpdate=true;bokeh.enabled=!(Math.min(screen.width,screen.height)<700&&!STILL)&&!params.has('nodof');composer.addPass(bokeh);
+  bokeh=new BokehPass(scene,view,{focus:2,aperture:.0016,maxblur:.007});bokeh.materialBokeh.fragmentShader=DOF_FS;bokeh.materialBokeh.needsUpdate=true;noGlassDepth(bokeh);bokeh.enabled=!(Math.min(screen.width,screen.height)<700&&!STILL)&&!params.has('nodof');composer.addPass(bokeh);
   composer.addPass(new OutputPass());
   grain=new ShaderPass(GrainShader);composer.addPass(grain);
   resize();
@@ -2814,6 +2866,11 @@ build().then(async w=>{
       // a few seconds after opening, build the traced scene once so its shader is compiled before it is needed
       else if(PHOTO.on&&!PHOTO.warmed&&now>PHOTO.t0+4000){PHOTO.warmed=true;photoLoad().then(c=>{if(c&&!c.active)c.prewarm()})}}
     const pc2=PHOTO.ctl;
+    // a trace that cannot get going (the shader never compiles, or a frame takes forever) gives way to the developed frame, for good on this device
+    if(pc2&&pc2.active&&PHOTO.kind==='pt'){PHOTO.wd=(PHOTO.wd||0)+dt;PHOTO.slow=dt>.12?(PHOTO.slow||0)+dt:0;
+      if(PHOTO.slow>2.5&&pc2.degrade){PHOTO.slow=0;pc2.degrade()}
+      if((pc2.compiling&&PHOTO.wd>25)||(!pc2.shown&&PHOTO.wd>45)){pc2.stop();try{localStorage.setItem('room.ptfail','1')}catch(e){}PHOTO.kind='acc';PHOTO.ctl=makeAccum();PHOTO.wd=0}}
+    else PHOTO.wd=0;
     if(pc2&&pc2.active){if(!pc2.shown){syncView();focusDOF();grain.uniforms.uTime.value=S.time;composer.render();if(pc2.ready)photoFade()}focusDOF();pc2.step({focus:bokeh.uniforms.focus.value,time:S.time})}
     else{syncView();focusDOF();grain.uniforms.uTime.value=S.time;composer.render()}
     requestAnimationFrame(frame);
