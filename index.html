@@ -9,12 +9,12 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta property="og:title" content="Ещё не конец">
 <meta property="og:description" content="Комната с открытым окном. Независимое издание об индустрии современного искусства в России.">
-<meta property="og:image" content="og.jpg">
+<meta property="og:image" content="https://eshche-ne-konets.ru/og.jpg">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Arimo:wght@400;700&display=swap">
-<link rel="stylesheet" href="style.css?v=41">
+<link rel="stylesheet" href="style.css?v=42">
 </head>
 <body>
 <canvas id="c" tabindex="0" aria-label="3D-сцена: комната с листами бумаги на стенах, стул с рулоном бумаги и открытое окно"></canvas>
@@ -27,7 +27,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.2" class="ln"/><path d="M12 4.8a7.2 7.2 0 0 1 0 14.4z" class="fl" id="modeHalf"/><circle cx="12" cy="12" r="10.4" class="ring" id="ptRing" pathLength="1"/></svg>
     </button>
     <button type="button" class="ib" data-sec="views" aria-label="Ракурсы">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15" class="ln"/><circle cx="12" cy="12" r="2.2" class="fl"/></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5A1.5 1.5 0 0 1 18.5 20H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15" class="ln"/><circle cx="12" cy="12" r="2.2" class="fl"/></svg>
     </button>
     <button type="button" class="ib" data-sec="films" aria-label="Фильмы">
       <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.6" y="5.6" width="16.8" height="12.8" rx="3.4" class="ln"/><path d="M10.4 9.3v5.4l4.6-2.7z" class="fl"/></svg>
@@ -98,6 +98,7 @@
   "three-gpu-pathtracer": "./vendor/gpt/index.js"
 } }
 </script>
-<script type="module" src="app.js?v=41"></script>
+<script type="module" src="app.js?v=42"></script>
+<script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));</script>
 </body>
 </html>
