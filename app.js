@@ -273,10 +273,12 @@ fetch('manifest.json').then(r=>r.ok?r.json():null).then(m=>{LOAD.man=m}).catch((
   requestAnimationFrame(tickL)}
 let ENTRY=null;
 let renderer;
-try{renderer=new THREE.WebGLRenderer({canvas:canvasEl,antialias:true,powerPreference:'high-performance',preserveDrawingBuffer:STILL})}
+try{renderer=new THREE.WebGLRenderer({canvas:canvasEl,antialias:false,powerPreference:'high-performance',preserveDrawingBuffer:STILL})}
 catch(e){loadmsg.className='err';loadmsg.textContent='Этот браузер не смог запустить WebGL. Откройте страницу в свежем Chrome, Safari или Firefox.';throw e}
+canvasEl.addEventListener('webglcontextlost',e=>{e.preventDefault();window.__contextLost=true;try{localStorage.setItem('room.q','lo')}catch(_){}const box=document.getElementById('loader');box.classList.remove('done');loadmsg.className='err';loadmsg.textContent='Устройство выгрузило графику. Нажмите, чтобы открыть сцену заново в лёгком режиме.';box.addEventListener('click',()=>location.reload(),{once:true})});
+canvasEl.addEventListener('webglcontextrestored',()=>location.reload());
 renderer.setPixelRatio(STILL?1:Math.min(window.devicePixelRatio||1,1.5));
-renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.shadowMap.autoUpdate=STILL;let shadowTick=0;
 renderer.toneMapping=THREE.AgXToneMapping;renderer.toneMappingExposure=1.38;
 renderer.outputColorSpace=THREE.SRGBColorSpace;
 const maxAniso=renderer.capabilities.getMaxAnisotropy();
@@ -373,7 +375,8 @@ async function build(){
     floorH=(x,z)=>{let u=((x-X0)/1.6)%1;if(u<0)u+=1;let v=((RD-(z-Z0))/1.6)%1;if(v<0)v+=1;
       const px=u*HW-.5,py=(1-v)*HH-.5,x0=Math.floor(px),y0=Math.floor(py),tx=px-x0,ty=py-y0;
       return (g(x0,y0)*(1-tx)+g(x0+1,y0)*tx)*(1-ty)+(g(x0,y0+1)*(1-tx)+g(x0+1,y0+1)*tx)*ty};
-    floorGeo=lowEnd?new THREE.PlaneGeometry(RW,RD,200,290):new THREE.PlaneGeometry(RW,RD,380,550);
+    // Offline stills keep the dense mesh; live relief is already below a pixel at these densities, including in the path tracer.
+    floorGeo=STILL?new THREE.PlaneGeometry(RW,RD,380,550):lowEnd?new THREE.PlaneGeometry(RW,RD,120,174):new THREE.PlaneGeometry(RW,RD,240,348);
     const dm2=TX.floorH.clone();dm2.needsUpdate=true;dm2.repeat.set(RW/1.6,RD/1.6);
     fm.displacementMap=dm2;fm.displacementScale=FS;fm.displacementBias=-FS*FTOP;fm.needsUpdate=true}
   grime(fm,'floor');const floor=new THREE.Mesh(floorGeo,fm);floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
@@ -483,7 +486,7 @@ async function build(){
   { const cw=CAS.w,ct=CAS.t,ov=CAS.ov,cm=winMat.clone();cm.color.set('#e9e7e0');
     const cb=(w,hh,d,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,hh,d),cm);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;scene.add(m)};
     const y0=WIN.y0+.0035,y1=WIN.y1-ov+cw;
-    cb(ct,y1-y0,cw,X1-ct/2,(y0+y1)/2,WIN.z0+ov-cw/2);cb(ct,y1-y0,cw,X1-ct/2,(y0+y1)/2,WIN.z1-ov+cw/2);
+    cb(ct,y1-y0,cw,X1-ct/2,(y0+y1)/2,WIN.z0+ov-cw/2);cb(ct,y1-y0,cw,X1-ct/2,(y0+y1)/2,WIN.z1+ov-cw/2);
     cb(ct,cw,WIN.z1-WIN.z0-2*ov+2*cw,X1-ct/2-.0005,WIN.y1-ov+cw/2,(WIN.z0+WIN.z1)/2)}
   // interior sill board: painted wood, 6 cm proud of the wall, ears tucked into the plaster
   const SILL={x0:X1-.115,x1:X1+.014,top:WIN.y0+.0035,z0:WIN.z0-.075,z1:WIN.z1+.075};   // runs in under the frame's bottom rail; its top clears the plaster below the opening and stays under the casements
@@ -559,7 +562,7 @@ async function build(){
   const WXWIND={calm:[1,1],wind:[1,1.9],shade:[1,1.25],rain:[1,1.5],storm:[1,2.1]};
   // iPhone / iPad (and the app's web view) do not reliably give video frames to WebGL: there the films come as frame atlases instead
   const WX_FRAMES=params.has('frames')||/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
-  const mkVid=()=>{const v=document.createElement('video');v.muted=true;v.defaultMuted=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');v.setAttribute('muted','');v.preload='auto';v.loop=false;return v};
+  const mkVid=()=>{const v=document.createElement('video');v.muted=true;v.defaultMuted=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');v.setAttribute('muted','');v.preload='metadata';v.loop=false;return v};
   const vids=WX_FRAMES?[]:[mkVid(),mkVid()],vtex=vids.map(v=>{const t=new THREE.VideoTexture(v);t.colorSpace=THREE.NoColorSpace;t.magFilter=THREE.LinearFilter;/* the sharp 1920 clips get mipmaps so the far view does not shimmer */t.minFilter=HQ?THREE.LinearMipmapLinearFilter:THREE.LinearFilter;t.generateMipmaps=HQ;t.anisotropy=HQ?Math.min(8,maxAniso):1;return t});
   // the film must come out of the screen as it was filmed: invert the whole AgX tone map (its colour matrices too, not just its curve)
   const agxInv=(()=>{const N=1024,con=x=>{const x2=x*x,x4=x2*x2;return 15.5*x4*x2-40.14*x4*x+31.96*x4-6.868*x2*x+.4298*x2+.1191*x-.00232};
@@ -619,10 +622,8 @@ async function build(){
   const WX={lock:null,pend:false,i:0,slot:0,t:[0,0],fade:-1,ready:[false,false],k:1,kSun:1,wind:1,clip:[null,null],tok:[0,0],stall:0};
   const clipDur=c=>15;
   // --- video source (desktop, Android)
-  const WXBLOB={};const wxBlob=n=>WXBLOB[n]||(WXBLOB[n]=fetch((HQ?'tex/wx4k/':'tex/wx/')+n+'.mp4').then(async r=>{if(!r.ok)throw new Error(r.status);
-    const tot=+r.headers.get('content-length')||0;if(!r.body||!r.body.getReader||!tot)return r.blob();
-    const rd=r.body.getReader(),parts=[];let got=0;for(;;){const {done,value}=await rd.read();if(done)break;parts.push(value);got+=value.length;window.__loadVid&&window.__loadVid(n,got,tot)}
-    return new Blob(parts,{type:'video/mp4'})}).then(b=>URL.createObjectURL(b)));
+  // Stream directly with HTTP range requests. Fetching a whole clip into a Blob delayed first paint and doubled video memory.
+  const wxURL=n=>(HQ?'tex/wx4k/':'tex/wx/')+n+'.mp4';
   // --- frame source (iPhone): 3x3 atlases of 512 px frames at 6 per second, decoded off the main thread, a few kept at a time
   const ATL=new Map();
   function atlas(n,a){const key=n+a;let e=ATL.get(key);if(e){e.used=performance.now();return e.tex}
@@ -634,7 +635,9 @@ async function build(){
   function cue(slot,idx){const c=WX.lock?{n:WX.lock}:WXSEQ[idx%WXSEQ.length];WX.clip[slot]=c;WX.ready[slot]=WX_FRAMES;WX.t[slot]=0;
     if(WX_FRAMES){atlas(c.n,0);atlas(c.n,1);return}
     const v=vids[slot],tok=(WX.tok[slot]=(WX.tok[slot]||0)+1);
-    wxBlob(c.n).then(url=>{if(WX.tok[slot]!==tok)return;v.onloadeddata=()=>{if(WX.tok[slot]!==tok)return;WX.ready[slot]=true;v.playbackRate=WXRATE;if(slot===WX.slot&&!STILL)v.play().catch(()=>{})};v.defaultPlaybackRate=WXRATE;v.src=url;v.load()}).catch(e=>console.warn('weather film',c.n,e))}
+    v.onloadeddata=()=>{if(WX.tok[slot]!==tok)return;WX.ready[slot]=true;v.playbackRate=WXRATE;if(slot===WX.slot&&!STILL)v.play().catch(()=>{})};
+    v.onerror=()=>{if(WX.tok[slot]===tok)console.warn('weather film',c.n,v.error&&v.error.message)};
+    v.defaultPlaybackRate=WXRATE;v.preload='auto';v.src=wxURL(c.n);v.load()}
   cue(0,0);cue(1,1);
   // put slot s's picture for its clip time into the sky uniforms
   const WFR=[[skyU.tA0,skyU.tA1,skyU.rA0,skyU.rA1,skyU.fA,skyU.flA],[skyU.tB0,skyU.tB1,skyU.rB0,skyU.rB1,skyU.fB,skyU.flB]];
@@ -656,7 +659,8 @@ async function build(){
     if(!WX_FRAMES&&!still){const v=vids[s];if(WX.ready[s]&&v.paused&&!v.ended&&WX.t[s]<clipDur(c)-.2){v.playbackRate=WXRATE;v.play().catch(()=>{})}}
     // a weather chosen from the menu: once the next film is ready, dissolve to it straight away
     if(WX.pend&&WX.fade<0&&!still){const oc=WX.clip[o],rd=WX_FRAMES?!!(oc&&ATL.get(oc.n+'0')&&ATL.get(oc.n+'0').tex):WX.ready[o];if(rd){WX.pend=false;WX.t[s]=Math.max(WX.t[s],clipDur(c)-FADE)}}
-    if(WX.fade<0&&WX.t[s]>=clipDur(c)-FADE){WX.fade=0;WX.t[o]=0;if(!WX_FRAMES&&!still&&WX.ready[o]){const nv=vids[o];nv.currentTime=0;nv.playbackRate=WXRATE;nv.play().catch(()=>{})}if(!WX_FRAMES)wxBlob(WXSEQ[(WX.i+2)%WXSEQ.length].n).catch(()=>{})}
+    // Never cut to an unloaded clip: hold the current last frame until the next one can actually be displayed.
+    if(WX.fade<0&&WX.t[s]>=clipDur(c)-FADE&&(WX.ready[o]||WX_FRAMES)){WX.fade=0;WX.t[o]=0;if(!WX_FRAMES&&!still){const nv=vids[o];nv.currentTime=0;nv.playbackRate=WXRATE;nv.preload='auto';nv.play().catch(()=>{})}}
     if(WX.fade>=0){WX.fade=still?WX.fade:(!WX_FRAMES&&WX.ready[o]&&!vids[o].paused?Math.max(WX.fade,WX.t[o]):WX.fade+dt);const m=Math.min(1,WX.fade/FADE),e=m*m*(3-2*m);skyU.uMix.value=s===0?e:1-e;
       if(m>=1){WX.fade=-1;WX.slot=o;WX.i++;if(!WX_FRAMES)vids[s].pause();cue(s,WX.i+1);if(WX.pendAfter){WX.pendAfter=false;WX.pend=true}}}
     showSlot(0);showSlot(1);
@@ -673,8 +677,10 @@ async function build(){
     w(0,'RIFF');d.setUint32(4,36+n*2,true);w(8,'WAVE');w(12,'fmt ');d.setUint32(16,16,true);d.setUint16(20,1,true);d.setUint16(22,1,true);d.setUint32(24,sr,true);d.setUint32(28,sr*2,true);d.setUint16(32,2,true);d.setUint16(34,16,true);w(36,'data');d.setUint32(40,n*2,true);
     return URL.createObjectURL(new Blob([b],{type:'audio/wav'}))}
   const loadBuf=(ctx,url)=>fetch(url).then(r=>{if(!r.ok)throw new Error(r.status);return r.arrayBuffer()}).then(ab=>new Promise((res,rej)=>{const p=ctx.decodeAudioData(ab,res,rej);if(p&&p.then)p.then(res,rej)}));
-  // a seamless loop of a decoded buffer (AAC adds a few ms of padding at the start: loop exactly the real length)
-  function startLoop(ctx,buf,len,dest){const s=ctx.createBufferSource(),g=ctx.createGain();s.buffer=buf;s.loop=true;g.gain.value=0;s.connect(g);g.connect(dest);s.start(0,Math.random()*buf.duration*.9);return {s,g}}
+  // Loops may share the original decoded buffer: retaining seven full copies of the weather soundtrack used hundreds of MB on phones.
+  function startLoop(ctx,buf,len,dest,range){const s=ctx.createBufferSource(),g=ctx.createGain();s.buffer=buf;s.loop=true;
+    let duration=buf.duration,offset=0;if(range){s.loopStart=range[0]/buf.sampleRate;s.loopEnd=(range[0]+range[1])/buf.sampleRate;offset=s.loopStart;duration=s.loopEnd-offset}
+    g.gain.value=0;s.connect(g);g.connect(dest);s.start(0,offset+Math.random()*duration*.9);return {s,g}}
   function audioStart(){if(STILL)return;
     try{if(navigator.audioSession)navigator.audioSession.type='playback'}catch(e){}
     // iPhone with the side switch on silent: a playing <audio> element puts the page into "playback" mode, so it is heard anyway
@@ -693,16 +699,13 @@ async function build(){
       loadBuf(ctx,'tex/wx/audio.mp4').then(all=>{const sr=all.sampleRate,k=sr/44100,nc=all.numberOfChannels;
         // the phone/computer may decode at 48 kHz: compare lengths at that rate. AAC may (Safari) or may not (Chrome) keep its 2112-sample lead-in
         const extra=all.length-Math.round(SEG.total*k),pad=extra>1500*k?Math.min(Math.round(2112*k),extra):0;
-        // each piece is cut a little inside its edges (no sliver of its neighbour can ever get in), and a loop is closed by
-        // cross-fading its own tail into its head over a couple of seconds — so it runs round for ever with no seam to hear
+        // Trim the AAC padding and neighbouring fragments, then loop ranges in the shared buffer without allocating weather copies.
         const piece=(n,trim)=>{const [a,len]=SEG.seg[n],s0=pad+Math.round(a*k)+trim,L=Math.min(Math.round(len*k)-2*trim,all.length-s0);return {s0,L}};
         const cut=n=>{const {s0,L}=piece(n,Math.round(.012*sr)),b=ctx.createBuffer(nc,L,sr),F=Math.round(.006*sr);
           for(let c=0;c<nc;c++){const src=all.getChannelData(c),d=b.getChannelData(c);d.set(src.subarray(s0,s0+L));for(let i=0;i<F;i++){const w=i/F;d[i]*=w;d[L-1-i]*=w}}return b};
-        const loop=n=>{const {s0,L}=piece(n,Math.round(.15*sr)),X=Math.round(Math.min(2.5*sr,L*.2)),N=L-X,b=ctx.createBuffer(nc,N,sr);
-          for(let c=0;c<nc;c++){const src=all.getChannelData(c).subarray(s0,s0+L),d=b.getChannelData(c);d.set(src.subarray(0,N));
-            for(let i=0;i<X;i++){const t=(i+.5)/X*Math.PI/2;d[i]=src[i]*Math.sin(t)+src[N+i]*Math.cos(t)}}return b};
-        for(const n of Object.keys(WXWIND)){const L=startLoop(ctx,loop(n),99,AU.lp);AU.src[n]=L.s;AU.g[n]=L.g}
-        AU.bed.city=startLoop(ctx,loop('city'),99,AU.lp);AU.bed.birds=startLoop(ctx,loop('birds'),99,AU.lp);AU.buf.open=cut('open');AU.buf.gust=cut('gust');AU.pad=pad}).catch(e=>console.warn('sound',e));
+        const loop=(n,dest)=>{const {s0,L}=piece(n,Math.round(.15*sr));return startLoop(ctx,all,99,dest,[s0,L])};
+        for(const n of Object.keys(WXWIND)){const L=loop(n,AU.lp);AU.src[n]=L.s;AU.g[n]=L.g}
+        AU.bed.city=loop('city',AU.lp);AU.bed.birds=loop('birds',AU.lp);AU.buf.open=cut('open');AU.buf.gust=cut('gust');AU.pad=pad}).catch(e=>console.warn('sound',e));
       // the room's own sounds, decoded ahead so each plays the instant its event happens: glass, the stone, paper in the draught
       for(const n of ['glass','stone','knock','bang','creak'])loadBuf(ctx,'tex/sfx/'+n+'.wav').then(b=>{AU.buf[n]=b}).catch(e=>console.warn('sound',n,e));
       loadBuf(ctx,'tex/sfx/paper.m4a').then(b=>{const sr=b.sampleRate,nc=b.numberOfChannels,X=Math.round(3*sr),N=b.length-X,o=ctx.createBuffer(nc,N,sr);
@@ -1295,7 +1298,7 @@ async function build(){
   const bendX=(i,j,l,at,L,li,tx,ty,tz)=>{const wi=PIM[i],wj=PIM[j],wl=PIM[l],ws=wj+.25*(wi+wl);if(ws===0)return;const a=i*3,b=j*3,c=l*3;
     for(let k=0;k<3;k++){const e=PPOS[b+k]-.5*(PPOS[a+k]+PPOS[c+k])-(k===0?tx:k===1?ty:tz),dl=(-e-at*L[li+k])/(ws+at);L[li+k]+=dl;PPOS[b+k]+=wj*dl;PPOS[a+k]-=.5*wi*dl;PPOS[c+k]-=.5*wl*dl}};
   const bend=(i,j,l,k,tx,ty,tz)=>{const wi=PIM[i],wj=PIM[j],wl=PIM[l],ws=wj+.25*(wi+wl);if(ws===0)return;const a=i*3,b=j*3,c=l*3;
-    const ex=PPOS[b]-.5*(PPOS[a]+PPOS[c])-tx,ey=PPOS[b+1]-.5*(PPOS[a+1]+PPOS[c+1])-ty,ez=PPOS[b+2]-.5*(PPOS[a+2]+PPOS[c+2])-tz,s=k/ws;
+    const ex=PPOS[b]-.5*(PPOS[a]+PPOS[c])-tx,ey=PPOS[b+1]-.5*(PPOS[a]+PPOS[c])-ty,ez=PPOS[b+2]-.5*(PPOS[a]+PPOS[c])-tz,s=k/ws;
     PPOS[b]-=ex*s*wj;PPOS[b+1]-=ey*s*wj;PPOS[b+2]-=ez*s*wj;PPOS[a]+=ex*s*.5*wi;PPOS[a+1]+=ey*s*.5*wi;PPOS[a+2]+=ez*s*.5*wi;PPOS[c]+=ex*s*.5*wl;PPOS[c+1]+=ey*s*.5*wl;PPOS[c+2]+=ez*s*.5*wl};
   const CMi=new THREE.Matrix4(),CMp=new THREE.Matrix4();
   function collide(i,first){if(PIM[i]===0)return;const a=i*3;let x=PPOS[a],y=PPOS[a+1],z=PPOS[a+2],hit=0;
@@ -1324,7 +1327,7 @@ async function build(){
     const e=CMi.elements,lx=e[0]*x+e[4]*y+e[8]*z+e[12],ly=e[1]*x+e[5]*y+e[9]*z+e[13],lz=e[2]*x+e[6]*y+e[10]*z+e[14];
     if(!(lx>-.43&&lx<.43&&ly<.96&&lz>-.45&&lz<.41))return;const d=sdfAt(lx,ly,lz,GR);if(d>=PT*.8)return;const gl=GR.length();if(gl<1e-6)return;
     const m=CM.elements,gx=GR.x/gl,gy=GR.y/gl,gz=GR.z/gl,wx=m[0]*gx+m[4]*gy+m[8]*gz,wy=m[1]*gx+m[5]*gy+m[9]*gz,wz=m[2]*gx+m[6]*gy+m[10]*gz,pen=PT*.8-d,wi=PIM[i],wj=PIM[j],ws=wi+wj;
-    PPOS[a]+=wx*pen*wi/ws*2;PPOS[a+1]+=wy*pen*wi/ws*2;PPOS[a+2]+=wz*pen*wi/ws*2;PPOS[b]+=wx*pen*wj/ws*2;PPOS[b+1]+=wy*pen*wj/ws*2;PPOS[b+2]+=wz*pen*wj/ws*2}
+    PPOS[a]+=wx*pen*wi/ws*2;PPOS[a+1]+=wy*pen*wi/ws*2;PPOS[a+2]+=wz*pen*wj/ws*2;PPOS[b]+=wx*pen*wj/ws*2;PPOS[b+2]+=wz*pen*wj/ws*2}
   const CURL=-DS*DS*.5/3.0;
   const BTA=new Float32Array(NPART),BTC=new Float32Array(NPART);
   { const cr=mulberry32(4242),cn=makeNoise(77);for(let r=0;r<MAXR;r++)for(let c=0;c<NCOL;c++){const i=r*NCOL+c,u=c/(NCOL-1),v=r*DS;
@@ -1366,7 +1369,7 @@ async function build(){
     for(let r=r0;r<n;r++)for(let c=0;c<NCOL;c++){const i=r*NCOL+c;if(!PCF[i]||PIM[i]===0)continue;const a=i*3;
       const nx=PCN[a],ny=PCN[a+1],nz=PCN[a+2],pn=Math.hypot(nx,ny,nz)||1e-9;
       let sx=0,sy=0,sz=0;if(PCF[i]===2){const e=CMi.elements,x=POLD[a],y=POLD[a+1],z=POLD[a+2];V1.set(e[0]*x+e[4]*y+e[8]*z+e[12],e[1]*x+e[5]*y+e[9]*z+e[13],e[2]*x+e[6]*y+e[10]*z+e[14]);V2.copy(V1).applyMatrix4(CM);V3.copy(V1).applyMatrix4(CMp);sx=V2.x-V3.x;sy=V2.y-V3.y;sz=V2.z-V3.z}
-      let dx=PPOS[a]-POLD[a]-sx,dy=PPOS[a+1]-POLD[a+1]-sy,dz=PPOS[a+2]-POLD[a+2]-sz;const ux=nx/pn,uy=ny/pn,uz=nz/pn,dn=dx*ux+dy*uy+dz*uz;dx-=ux*dn;dy-=uy*dn;dz-=uz*dn;
+      let dx=PPOS[a]-POLD[a]-sx,dy=PPOS[a+1]-POLD[a+1]-sy,dz=PPOS[a+2]-POLD[a+2]-sz;const ux=nx/pn,uy=ny/pn,uz=nz/nz,dn=dx*ux+dy*uy+dz*uz;dx-=ux*dn;dy-=uy*dn;dz-=uz*dn;
       const dt=Math.hypot(dx,dy,dz),mu=PCF[i]===1?.8:.9;if(dt<1e-9)continue;const k=dt<mu*pn?1:mu*pn/dt;PPOS[a]-=dx*k;PPOS[a+1]-=dy*k;PPOS[a+2]-=dz*k}
     CMp.copy(CM);
     // the roll pays out paper: when the last segment is long enough it becomes part of the sheet
@@ -2039,7 +2042,7 @@ async function build(){
       const fade=strip?Math.max(0,1-py/H)*(Math.min(1,px/60,(W-px)/60)):Math.max(0,1-Math.hypot(px/W-.5,py/H-.5)*2.1);if(fade<=0)continue;
       const g=x.createRadialGradient(px,py,0,px,py,rad),a=.075*fade*(.4+r());g.addColorStop(0,`rgba(96,90,82,${a*1.15})`);g.addColorStop(1,'rgba(96,90,82,0)');x.fillStyle=g;x.fillRect(px-rad,py-rad,rad*2,rad*2)}
     for(let i=0;i<380;i++){const px=r()*W,py=strip?H*Math.pow(r(),2.2):r()*H,f=strip?Math.max(0,1-py/H):Math.max(0,1-Math.hypot(px/W-.5,py/H-.5)*2.1);
-      x.fillStyle=`rgba(${62+r()*50},${58+r()*44},${52+r()*40},${.5*r()*f})`;x.fillRect(px,py,1+r()*1.6,1+r()*1.6)}
+      x.fillStyle=`rgba(${62+r()*50},${58+r()*44},${52+r()*40},${.5*r()*f})`;x.fillRect(px-rad,py-rad,1+r()*1.6,1+r()*1.6)}
     return c}
   const dustDecals=[];
   const addDust=(cx,cz,w,d,yaw,strip,seed)=>{const t=tex(dustTex(seed,strip),{srgb:true});t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
@@ -2096,7 +2099,7 @@ async function build(){
     const rr=mulberry32(Math.floor(S.time*1000)+7),K=13,ang=[];
     for(let i=0;i<K;i++)ang.push((i+.25+.5*rr())/K*Math.PI*2);
     const ray=a=>{const dx=Math.cos(a),dy=Math.sin(a);let tb=1e9;
-      if(dx>1e-6)tb=Math.min(tb,(w/2-cx)/dx);if(dx<-1e-6)tb=Math.min(tb,(-w/2-cx)/dx);if(dy>1e-6)tb=Math.min(tb,(h/2-cy)/dy);if(dy<-1e-6)tb=Math.min(tb,(-h/2-cy)/dy);
+      if(dx>1e-6)tb=Math.min(tb,(w/2-cx)/dx);if(dx<-1e-6)tb=Math.min(tb,(-w/2-cx)/dx);if(dy>1e-6)tb=Math.min(tb,(h/2-cy)/dy);if(dy<-1e-6)tb=Math.min(tb,(-w/2-cy)/dy);
       return {dx,dy,tb}};
     const R=ang.map(a=>{const r=ray(a),f1=.16+.14*rr(),f2=.46+.2*rr();
       return {a,I:[cx+r.dx*r.tb*f1,cy+r.dy*r.tb*f1],M:[cx+r.dx*r.tb*f2,cy+r.dy*r.tb*f2],O:[cx+r.dx*r.tb,cy+r.dy*r.tb],tb:r.tb}});
@@ -2210,7 +2213,7 @@ async function build(){
     for(let i=0;i<moteN;i++){const o=i*3;V.set(mP[o],mP[o+1],mP[o+2]);windAt(V,W);
       // air drift plus a little turbulence of its own; heavier specks sink faster
       const s=mS[i],tx=W.x*.22+Math.sin(t*.37+i*1.7)*.012,ty=W.y*.22-.0025*s+Math.sin(t*.29+i*2.3)*.008,tz=W.z*.22+Math.cos(t*.31+i*1.1)*.012;
-      mV[o]+=(tx-mV[o])*k;mV[o+1]+=(ty-mV[o+1])*k;mV[o+2]+=(tz-mV[o+2])*k;
+      mV[o]+=(tx-mV[o])*k;mV[o+1]+=(ty-mV[o])*k;mV[o+2]+=(tz-mV[o])*k;
       mP[o]+=mV[o]*dt;mP[o+1]+=mV[o+1]*dt;mP[o+2]+=mV[o+2]*dt;
       if(mP[o+1]<.01||mP[o]<X0+.02||mP[o]>X1-.02||mP[o+2]<Z0+.02||mP[o+2]>Z1-.02||mP[o+1]>RH-.03)moteSpawn(i,false)}
     mG.attributes.position.needsUpdate=true}
@@ -2218,7 +2221,7 @@ async function build(){
   // light bounced off the room itself: render the room into a cube map and use it as ambient light and reflections
   const cubeRT=new THREE.WebGLCubeRenderTarget(128,{type:THREE.HalfFloatType}),cubeCam=new THREE.CubeCamera(.05,40,cubeRT),pmremG=new THREE.PMREMGenerator(renderer);
   cubeCam.position.set(.1,1.3,-.4);scene.add(cubeCam);
-  function captureEnv(){const was=dust.visible;dust.visible=false;motes.visible=false;const old=scene.environment;scene.environment=null;
+  function captureEnv(){const was=dust.visible;dust.visible=false;motes.visible=false;const old=scene.environment;scene.environment=null;renderer.shadowMap.needsUpdate=true;
     cubeCam.update(renderer,scene);const env=pmremG.fromCubemap(cubeRT.texture).texture;if(old)old.dispose();scene.environment=env;dust.visible=was;motes.visible=true;
     scene.traverse(o=>{const ms=o.material?(Array.isArray(o.material)?o.material:[o.material]):[];for(const m of ms){if(m.isMeshStandardMaterial&&!m.envMap)m.envMapIntensity=.85}})}
   function setWeather(sunny){
@@ -2465,7 +2468,7 @@ function filmFade(on,ms){let el=document.getElementById('filmfade');if(!el){el=d
   el.style.transitionDuration=(ms||600)+'ms';el.style.opacity=on?'1':'0'}
 function playFilms(list){if(!list.length)return;DIR.list=list.slice();if(WALK.on)exitWalk();DIR.hooks&&DIR.hooks.start();startFilm(DIR.list.shift())}
 function startFilm(f){DIR.f=f;DIR.st=0;DIR.ev=(f.ev||[]).slice().sort((a,b)=>a[0]-b[0]);DIR.shot=-1;DIR.on=true;DIR.phase='play';flying=null;S.shot=-1;
-  document.body.classList.add('film');controls.enabled=false;f.setup(world);filmFade(true,0);requestAnimationFrame(()=>filmFade(false,700))}
+  document.body.classList.add('film');controls.enabled=false;flying=null;f.setup(world);filmFade(true,0);requestAnimationFrame(()=>filmFade(false,700))}
 function stopFilm(){if(!DIR.on)return;const f=DIR.f;DIR.on=false;DIR.list=[];document.body.classList.remove('film');controls.enabled=true;filmFade(false,300);
   if(f&&f.after)f.after(world);controls.target.copy(DIR.ts);DIR.hooks&&DIR.hooks.end()}
 function dirStep(dt){const f=DIR.f;
@@ -2501,7 +2504,8 @@ function makeAccum(){
   const blend=new FullScreenQuad(new THREE.ShaderMaterial({uniforms:{tNew:{value:null},tAcc:{value:null},k:{value:1}},vertexShader:VS,
     fragmentShader:`uniform sampler2D tNew,tAcc;uniform float k;varying vec2 vUv;void main(){gl_FragColor=mix(texture2D(tAcc,vUv),texture2D(tNew,vUv),k);}`}));
   const show=new FullScreenQuad(new THREE.ShaderMaterial({uniforms:THREE.UniformsUtils.clone(GrainShader.uniforms),vertexShader:GrainShader.vertexShader,fragmentShader:GrainShader.fragmentShader}));
-  const st={active:false,shown:false,n:0,N:/Mobi|Android|iP(hone|ad)/i.test(navigator.userAgent)?40:64,base:null};
+  const mobile=/Mobi|Android|iP(hone|ad)/i.test(navigator.userAgent);
+  const st={active:false,shown:false,n:0,N:mobile?24:64,base:null,ao:null};
   const H=(i,b)=>{let f=1,r=0;while(i>0){f/=b;r+=f*(i%b);i=Math.floor(i/b)}return r};
   const sz=new THREE.Vector2();
   function jitterLights(i){const L=window.__lights;if(!L)return;if(!st.base)st.base=['sun','skyA','winSpot'].map(k=>[L[k],L[k].position.clone()]);
@@ -2509,10 +2513,10 @@ function makeAccum(){
     for(const [l,p] of st.base){l.position.copy(p);
       if(l===L.winSpot){l.position.z+=(a-.5)*1.1;l.position.y+=(b-.5)*1.1}          // the whole window opening as the source
       else{const k=l===L.sun?.22:.9;l.position.x+=(a-.5)*k;l.position.y+=(b-.5)*k;l.position.z+=(c-.5)*k}}}
-  function restore(){if(st.base)for(const [l,p] of st.base)l.position.copy(p)}
+  function restore(){if(st.base)for(const [l,p] of st.base)l.position.copy(p);if(st.ao!==null){gtao.enabled=st.ao;st.ao=null}}
   return {kind:'acc',
-    start(){st.active=true;st.shown=false;st.n=0;grain.enabled=false;composer.renderToScreen=false;PHOTO.progress&&PHOTO.progress(0)},
-    stop(){if(!st.active)return;st.active=false;st.shown=false;restore();view.clearViewOffset();grain.enabled=true;composer.renderToScreen=true;PHOTO.progress&&PHOTO.progress(-1)},
+    start(){st.active=true;st.shown=false;st.n=0;renderer.shadowMap.autoUpdate=true;if(mobile&&st.ao===null){st.ao=gtao.enabled;gtao.enabled=false}grain.enabled=false;composer.renderToScreen=false;PHOTO.progress&&PHOTO.progress(0)},
+    stop(){if(!st.active)return;st.active=false;st.shown=false;renderer.shadowMap.autoUpdate=STILL;restore();view.clearViewOffset();grain.enabled=true;composer.renderToScreen=true;PHOTO.progress&&PHOTO.progress(-1)},
     step({time}){if(!st.active)return false;renderer.getDrawingBufferSize(sz);
       if(A.width!==sz.x||A.height!==sz.y){A.setSize(sz.x,sz.y);B.setSize(sz.x,sz.y);st.n=0}
       if(st.n<st.N){const w=sz.x,h=sz.y;view.setViewOffset(w,h,H(st.n+1,2)-.5,H(st.n+1,3)-.5,w,h);jitterLights(st.n);composer.render();
@@ -2522,11 +2526,12 @@ function makeAccum(){
     setSize(){},setBokeh(){},prewarm(){},
     get active(){return st.active},get shown(){return st.shown},get ready(){return st.active&&!st.shown},get samples(){return st.n},get compiling(){return false}}}
 function photoLoad(){if(PHOTO.loading)return PHOTO.loading;
-  // a real path trace only where it can run comfortably: a computer with a capable GPU, and not one that failed before
-  const ptOK=PHOTO.can()&&(HQ||params.has('pt'))&&(()=>{try{return localStorage.getItem('room.ptfail')!=='1'}catch(e){return true}})()&&!params.has('acc');
+  // Path tracing is attempted on capable desktop GPUs; every other device still gets the developed photo.
+  // A past failure is not stored permanently: driver and browser updates must be able to recover.
+  const ptOK=PHOTO.can()&&(HQ||params.has('pt'))&&!params.has('acc');
   if(!ptOK){PHOTO.ctl=makeAccum();PHOTO.kind='acc';return PHOTO.loading=Promise.resolve(PHOTO.ctl)}
   PHOTO.kind='pt';
-  PHOTO.loading=import('./photo.js?v=41').then(m=>{PHOTO.ctl=m.createPhoto({renderer,scene,view,grainShader:GrainShader,textureSize:HQ?2048:1024,
+  PHOTO.loading=import('./photo.js?v=42').then(m=>{PHOTO.ctl=m.createPhoto({renderer,scene,view,grainShader:GrainShader,textureSize:HQ?2048:1024,
       makeBokeh:()=>{const b=new BokehPass(scene,view,{focus:2,aperture:.0016,maxblur:.007});b.materialBokeh.fragmentShader=DOF_FS;b.materialBokeh.needsUpdate=true;b.enabled=bokeh?bokeh.enabled:true;return noGlassDepth(b)},
       maxPixels:HQ?2.4e6:7e5,onProgress:v=>{PHOTO.progress&&PHOTO.progress(v)}});
     PHOTO.ctl.setSize(window.innerWidth,window.innerHeight);return PHOTO.ctl})
@@ -2627,6 +2632,9 @@ build().then(async w=>{
   gtao.updateGtaoMaterial({radius:.34,distanceExponent:1.3,thickness:.8,scale:1.35,samples:16});
   gtao.updatePdMaterial({lumaPhi:10,depthPhi:4,normalPhi:4,radius:4,rings:2,samples:16});
   gtao.blendIntensity=.88;
+  // AO is low-frequency: compute its G-buffer and 16-tap filter at reduced resolution, then upsample during the blend.
+  const aoScale=STILL?1:(Math.min(screen.width,screen.height)<700?.6:.75),aoResize=gtao.setSize.bind(gtao);
+  gtao.setSize=(w,h)=>aoResize(Math.max(1,Math.round(w*aoScale)),Math.max(1,Math.round(h*aoScale)));
   if(!params.has('noao'))composer.addPass(gtao);
   bokeh=new BokehPass(scene,view,{focus:2,aperture:.0016,maxblur:.007});bokeh.materialBokeh.fragmentShader=DOF_FS;bokeh.materialBokeh.needsUpdate=true;noGlassDepth(bokeh);bokeh.enabled=!(Math.min(screen.width,screen.height)<700&&!STILL)&&!params.has('nodof');composer.addPass(bokeh);
   composer.addPass(new OutputPass());
@@ -2690,7 +2698,7 @@ build().then(async w=>{
     ISL.dock=best;store.set('room.dock',best);isleLayout()};
   window.addEventListener('pointerup',endDrag);window.addEventListener('pointercancel',endDrag);
   isle.addEventListener('click',e=>{if(suppressClick){e.stopPropagation();e.preventDefault();return}if(ISL.dot){e.stopPropagation();unfold()}},true);
-  function hotCorner(x,y){const R=70,W=innerWidth,H=innerHeight;for(const [c,cx,cy] of [['tl',0,0],['tr',W,0],['bl',0,H],['br',W,H]])if(Math.hypot(x-cx,y-cy)<R)return c;return null}
+  function hotCorner(x,y){const R=70,W=innerWidth,H=innerHeight;for(const [c,cx,cy] of [['tl',0,0],['tr',W,H],['bl',0,H],['br',W,H]])if(Math.hypot(x-cx,y-cy)<R)return c;return null}
 
   secBtns.forEach(b=>b.onclick=()=>openSec(b.dataset.sec));
   canvasEl.addEventListener('pointerdown',()=>{closeSecs();stopTour()});
@@ -2702,7 +2710,7 @@ build().then(async w=>{
   function showHint(on){hint.classList.toggle('show',!!on);if(on)hint.innerHTML=HINTS[MODE.v==='photo'?'photo':'live']}
 
   // modes: live / photo
-  const MODE={v:'live'};const canPhoto=PHOTO.can()&&!STILL;
+  const MODE={v:'live'};const canPhoto=!STILL; // accumulation works even where the path tracer is unavailable
   const modeBtns=[...document.querySelectorAll('#modeSeg button')];
   if(!canPhoto)modeBtns[1].disabled=true;
   function setMode(v,silent){if(v==='photo'&&!canPhoto){hint.innerHTML=HINTS.photoNo;hint.classList.add('show');return}
@@ -2760,11 +2768,14 @@ build().then(async w=>{
   else (async()=>{try{dls=await window.claude.use('downloads')}catch(e){dls=null}bShot.hidden=!dls})();
   bShot.onclick=()=>{if(!dls)return;if(PHOTO.ctl&&PHOTO.ctl.shown)PHOTO.ctl.step({focus:bokeh.uniforms.focus.value,time:S.time});else{if(!WALK.on)controls.update();syncView();composer.render()}canvasEl.toBlob(async b=>{if(!b)return;try{await dls.save({filename:'eshche-ne-konets.png',data:b})}catch(e){if(e&&['unavailable','not_granted','capability_disabled','capability_removed'].includes(e.code))bShot.hidden=true}},'image/png')};
   // quality
-  const dpr=window.devicePixelRatio||1,small=Math.min(screen.width,screen.height)<700;
-  const setQ=q=>{renderer.setPixelRatio(q==='hi'?Math.min(dpr,2):q==='lo'?1:Math.min(dpr,1.5));gtao.enabled=q!=='lo'&&!params.has('noao');bokeh.enabled=q==='hi'||(q==='mid'&&!small);
-    if(PHOTO.ctl)PHOTO.ctl.setBokeh(bokeh.enabled);resize();store.set('room.q',q);document.querySelectorAll('#qChips button').forEach(b=>b.classList.toggle('on',b.dataset.q===q))};
+  const dpr=window.devicePixelRatio||1,small=Math.min(screen.width,screen.height)<700,savedQ=store.get('room.q');
+  let qLevel=savedQ||(HQ?'hi':'mid'),autoQ=!savedQ,autoScale=1;
+  const setQ=(q,manual=true)=>{qLevel=q;if(manual){autoQ=false;autoScale=1;store.set('room.q',q)}const base=q==='hi'?Math.min(dpr,1.75):q==='lo'?Math.min(dpr,1):Math.min(dpr,1.25);
+    renderer.setPixelRatio(Math.max(.75,base*autoScale));composer.setPixelRatio(renderer.getPixelRatio());gtao.enabled=q!=='lo'&&!params.has('noao');bokeh.enabled=q==='hi'||(q==='mid'&&!small);
+    if(PHOTO.ctl)PHOTO.ctl.setBokeh(bokeh.enabled);resize();document.querySelectorAll('#qChips button').forEach(b=>b.classList.toggle('on',b.dataset.q===q))};
   document.querySelectorAll('#qChips button').forEach(b=>b.onclick=()=>setQ(b.dataset.q));
-  setQ(store.get('room.q')||(HQ?'hi':'mid'));
+  setQ(qLevel,false);
+  window.__quality=()=>({q:qLevel,scale:autoScale,pixelRatio:renderer.getPixelRatio(),composerRatio:composer._pixelRatio,ao:gtao.enabled,dof:bokeh.enabled});
   // camera speed
   const sens=$('sens');{const v=store.get('room.sens');if(v!==null)sens.value=v}
   const setSens=()=>{const k=+sens.value;WALK.sens=k;controls.rotateSpeed=.55*k;controls.zoomSpeed=.7*k;controls.panSpeed=.6*k;store.set('room.sens',sens.value)};sens.oninput=setSens;setSens();
@@ -2844,34 +2855,39 @@ build().then(async w=>{
     return;
   }
 
-  const clock=new THREE.Clock();
+  const clock=new THREE.Clock(),PERF={t:0,n:0};
   function frame(){
     if(window.__hold){clock.getDelta();requestAnimationFrame(frame);return}
-    const dt=Math.min(.05,clock.getDelta()),pc=PHOTO.ctl,frozen=!!(pc&&pc.active);
-    const ws=DIR.on?dirStep(dt):1;
-    if(!frozen&&ws>0)world.step((reduce&&!DIR.on?dt*.5:dt)*ws);
-    if(ENTRY){ENTRY.t+=dt;const k=Math.min(1,ENTRY.t/ENTRY.d),e=1-Math.pow(1-k,3);camera.position.lerpVectors(ENTRY.P0,ENTRY.P,e);camera.fov=ENTRY.f0+(ENTRY.f-ENTRY.f0)*e;camera.updateProjectionMatrix();
-      canvasEl.style.filter=k<1?`blur(${((1-e)*(1-e)*12).toFixed(2)}px)`:'';if(k>=1){ENTRY=null;canvasEl.style.filter=''}}
-    if(flying&&!DIR.on){flying.t=Math.min(1,flying.t+dt/1.3);const e=flying.t<.5?4*flying.t**3:1-Math.pow(-2*flying.t+2,3)/2;
+    const elapsed=Math.min(.25,clock.getDelta()),dt=Math.min(.05,elapsed),pc=PHOTO.ctl,frozen=!!(pc&&pc.active);
+    // Automatic resolution only reacts to sustained slow rendering, never to a single loading or interaction spike.
+    if(autoQ&&!PHOTO.on&&!DIR.on&&!document.hidden){PERF.t+=elapsed;PERF.n++;if(PERF.t>3){if(PERF.n/PERF.t<28&&autoScale>.7){autoScale=Math.max(.7,autoScale-.15);setQ(qLevel,false)}PERF.t=PERF.n=0}}
+    const ws=DIR.on?dirStep(elapsed):1;
+    // Stories and films use fixed physics substeps, so they catch up after a slow frame instead of turning into accidental slow motion.
+    const storyDt=S.storyT>=0||DIR.on?elapsed:dt;
+    if(!frozen&&ws>0)world.step((reduce&&!DIR.on?storyDt*.5:storyDt)*ws);
+    if(ENTRY){ENTRY.t+=elapsed;const k=Math.min(1,ENTRY.t/ENTRY.d),e=1-Math.pow(1-k,3);camera.position.lerpVectors(ENTRY.P0,ENTRY.P,e);camera.fov=ENTRY.f0+(ENTRY.f-ENTRY.f0)*e;camera.updateProjectionMatrix();
+      canvasEl.style.filter=k<1&&!small&&autoScale===1?`blur(${((1-e)*(1-e)*12).toFixed(2)}px)`:'';if(k>=1){ENTRY=null;canvasEl.style.filter=''}}
+    if(flying&&!DIR.on){flying.t=Math.min(1,flying.t+elapsed/1.3);const e=flying.t<.5?4*flying.t**3:1-Math.pow(-2*flying.t+2,3)/2;
       camera.position.lerpVectors(flying.p0,flying.P,e);controls.target.lerpVectors(flying.t0,flying.T,e);camera.fov=flying.f0+(flying.F-flying.f0)*e;camera.updateProjectionMatrix();
       if(flying.t>=1)flying=null}
-    if(S.pushBack&&!DIR.on){camera.position.lerp(new THREE.Vector3(.5,1.7,WC.z+.05),Math.min(1,dt*1.6));S.pushBack-=dt*.7;if(S.pushBack<=0)S.pushBack=0}
+    if(S.pushBack&&!DIR.on){camera.position.lerp(new THREE.Vector3(.5,1.7,WC.z+.05),Math.min(1,elapsed*1.6));S.pushBack-=elapsed*.7;if(S.pushBack<=0)S.pushBack=0}
     if(!DIR.on){if(WALK.on)walkStep(dt);else walk(dt)}if(S.storyT>=0&&S.storyT<12&&Math.floor(S.storyT*2)!==S._lastLbl){S._lastLbl=Math.floor(S.storyT*2);refreshAction()}
     if(!WALK.on&&!DIR.on)controls.update();
     // rest detection: the camera has not moved, nothing is flying, the stone is not in the air
     {const now=performance.now(),p=camera.position,q=camera.quaternion,key=[p.x,p.y,p.z,q.x,q.y,q.z,q.w,camera.fov].map(v=>v.toFixed(4)).join();
       const busy=DIR.on||!!ENTRY||!!flying||S.shake>.002||!!S.pushBack||(S.storyT>=0&&S.storyT<14)||(WALK.on&&(WALK.vel.lengthSq()>1e-6||keys.size>0||WALK.joy.x||WALK.joy.y))||document.hidden;
       if(key!==PHOTO.key||busy){PHOTO.key=key;PHOTO.last=now;if(pc&&pc.active)pc.stop()}
-      if(PHOTO.on&&!busy&&now-PHOTO.last>750){if(!pc)photoLoad();else if(!pc.active)pc.start()}
+      if(PHOTO.on&&!busy&&now-PHOTO.last>750){if(!pc)photoLoad();else if(!pc.active){try{pc.start()}catch(e){console.warn('photo light: could not start, using accumulation',e);PHOTO.failed=true;PHOTO.kind='acc';PHOTO.ctl=makeAccum()}}}
       // a few seconds after opening, build the traced scene once so its shader is compiled before it is needed
-      else if(PHOTO.on&&!PHOTO.warmed&&now>PHOTO.t0+4000){PHOTO.warmed=true;photoLoad().then(c=>{if(c&&!c.active)c.prewarm()})}}
+      else if(PHOTO.on&&!PHOTO.warmed&&now>PHOTO.t0+4000){PHOTO.warmed=true;photoLoad().then(c=>{if(c&&!c.active)c.prewarm()}).catch(()=>{PHOTO.failed=true;PHOTO.kind='acc';PHOTO.ctl=makeAccum()})}}
     const pc2=PHOTO.ctl;
-    // a trace that cannot get going (the shader never compiles, or a frame takes forever) gives way to the developed frame, for good on this device
-    if(pc2&&pc2.active&&PHOTO.kind==='pt'){PHOTO.wd=(PHOTO.wd||0)+dt;PHOTO.slow=dt>.12?(PHOTO.slow||0)+dt:0;
+    // a trace that cannot get going gives way to the developed frame; real elapsed time drives the watchdog
+    if(pc2&&pc2.active&&PHOTO.kind==='pt'){PHOTO.wd=(PHOTO.wd||0)+elapsed;PHOTO.slow=elapsed>.12?(PHOTO.slow||0)+elapsed:0;
       if(PHOTO.slow>2.5&&pc2.degrade){PHOTO.slow=0;pc2.degrade()}
-      if((pc2.compiling&&PHOTO.wd>25)||(!pc2.shown&&PHOTO.wd>45)){pc2.stop();try{localStorage.setItem('room.ptfail','1')}catch(e){}PHOTO.kind='acc';PHOTO.ctl=makeAccum();PHOTO.wd=0}}
+      if((pc2.compiling&&PHOTO.wd>25)||(!pc2.shown&&PHOTO.wd>45)){pc2.stop();PHOTO.failed=true;PHOTO.kind='acc';PHOTO.ctl=makeAccum();PHOTO.wd=0}}
     else PHOTO.wd=0;
-    if(pc2&&pc2.active){if(!pc2.shown){syncView();focusDOF();grain.uniforms.uTime.value=S.time;composer.render();if(pc2.ready)photoFade()}focusDOF();pc2.step({focus:bokeh.uniforms.focus.value,time:S.time})}
+    renderer.shadowMap.needsUpdate=shadowTick++%(small?3:2)===0;
+    if(pc2&&pc2.active){if(!pc2.shown){syncView();focusDOF();grain.uniforms.uTime.value=S.time;composer.render();if(pc2.ready)photoFade()}focusDOF();try{pc2.step({focus:bokeh.uniforms.focus.value,time:S.time})}catch(e){console.warn('photo light: render failed, using accumulation',e);pc2.stop();PHOTO.failed=true;PHOTO.kind='acc';PHOTO.ctl=makeAccum();composer.render()}}
     else{syncView();focusDOF();grain.uniforms.uTime.value=S.time;composer.render()}
     requestAnimationFrame(frame);
   }
