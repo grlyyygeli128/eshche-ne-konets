@@ -486,13 +486,13 @@ async function build(){
   { const cw=CAS.w,ct=CAS.t,ov=CAS.ov,cm=winMat.clone();cm.color.set('#e9e7e0');
     const cb=(w,hh,d,x,y,z)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(w,hh,d),cm);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;scene.add(m)};
     const y0=WIN.y0+.0035,y1=WIN.y1-ov+cw;
-    cb(ct,y1-y0,cw,X1-ct/2,(y0+y1)/2,WIN.z0+ov-cw/2);cb(ct,y1-y0,cw,X1-ct/2,(y0+y1)/2,WIN.z1+ov-cw/2);
+    cb(ct,y1-y0,cw,X1-ct/2,(y0+y1)/2,WIN.z0+ov-cw/2);cb(ct,y1-y0,cw,X1-ct/2,(y0+y1)/2,WIN.z1-ov+cw/2);
     cb(ct,cw,WIN.z1-WIN.z0-2*ov+2*cw,X1-ct/2-.0005,WIN.y1-ov+cw/2,(WIN.z0+WIN.z1)/2)}
   // interior sill board: painted wood, 6 cm proud of the wall, ears tucked into the plaster
   const SILL={x0:X1-.115,x1:X1+.014,top:WIN.y0+.0035,z0:WIN.z0-.075,z1:WIN.z1+.075};   // runs in under the frame's bottom rail; its top clears the plaster below the opening and stays under the casements
   { const t=.034,r=.009,sp=new THREE.Shape();
     sp.moveTo(SILL.x1,SILL.top-t);sp.lineTo(SILL.x0+r*.6,SILL.top-t);sp.quadraticCurveTo(SILL.x0,SILL.top-t,SILL.x0,SILL.top-t+r);
-    sp.lineTo(SILL.x0,SILL.top-r);sp.quadraticCurveTo(SILL.x0,SILL.top,SILL.x0+r,SILL.top);sp.lineTo(SILL.x1,SILL.top);sp.lineTo(SILL.x1,SILL.top-t);
+    sp.lineTo(SILL.x0,SILL.top-r);sp.lineTo(SILL.x0,SILL.top,SILL.x0+r,SILL.top);sp.lineTo(SILL.x1,SILL.top);sp.lineTo(SILL.x1,SILL.top-t);
     const g=new THREE.ExtrudeGeometry(sp,{depth:SILL.z1-SILL.z0,bevelEnabled:false,curveSegments:6});g.translate(0,0,SILL.z0);
     const sm=winMat.clone();if(sm.map){for(const k of ['map','normalMap','roughnessMap']){const tx=sm[k].clone();tx.needsUpdate=true;tx.wrapS=tx.wrapT=THREE.RepeatWrapping;tx.repeat.set(1.6,1.6);sm[k]=tx}}
     sm.color.set('#ecebe5');const sill=new THREE.Mesh(g,sm);sill.castShadow=true;sill.receiveShadow=true;scene.add(sill)}
@@ -936,7 +936,7 @@ async function build(){
         // a falling sheet: air resists it mostly across its face, the pressure acts ahead of its middle so it flips, glides and swings down
         const n=FN.set(0,0,1).applyQuaternion(f.m.quaternion);const rel=FR.copy(f.vel).sub(W),vn=rel.dot(n);
         f.vel.addScaledVector(n,-(13*vn*Math.abs(vn)+1.1*vn)*dt);FT.copy(rel).addScaledVector(n,-vn);f.vel.addScaledVector(FT,-.8*dt);f.vel.y-=9.8*dt;
-        FA.crossVectors(n,FT).multiplyScalar(vn*7);f.ang.addScaledVector(FA,dt);f.ang.x+=Math.sin(S.time*5.3+f.ph)*(.6+wm)*dt;f.ang.z+=Math.cos(S.time*4.1+f.ph*2)*(.6+wm)*dt;f.ang.multiplyScalar(Math.exp(-dt*1.6));
+        FA.crossVectors(n,FT).multiplyScalar(vn*7);f.ang.addScaledVector(FA,dt);f.ang.x+=Math.sin(S.time*5.3+f.ph)*(.6+wm)*dt;f.ang.z+=Math.cos(S.time*4.1+f.ph)*(.6+wm)*dt;f.ang.multiplyScalar(Math.exp(-dt*1.6));
         const a=f.ang.length();if(a>1e-4){Q.setFromAxisAngle(A.copy(f.ang).multiplyScalar(1/a),a*dt);f.m.quaternion.premultiply(Q)}
         p.addScaledVector(f.vel,dt);if(p.z<Z0+.09&&p.y>.05){p.z=Z0+.09;f.vel.z=Math.abs(f.vel.z)*.3}
         if(p.x<X0+.08){p.x=X0+.08;f.vel.x*=-.3}if(p.x>X1-.08&&!(p.z>WIN.z0&&p.z<WIN.z1&&p.y>WIN.y0&&p.y<WIN.y1)){p.x=X1-.08;f.vel.x*=-.3}
@@ -1298,7 +1298,7 @@ async function build(){
   const bendX=(i,j,l,at,L,li,tx,ty,tz)=>{const wi=PIM[i],wj=PIM[j],wl=PIM[l],ws=wj+.25*(wi+wl);if(ws===0)return;const a=i*3,b=j*3,c=l*3;
     for(let k=0;k<3;k++){const e=PPOS[b+k]-.5*(PPOS[a+k]+PPOS[c+k])-(k===0?tx:k===1?ty:tz),dl=(-e-at*L[li+k])/(ws+at);L[li+k]+=dl;PPOS[b+k]+=wj*dl;PPOS[a+k]-=.5*wi*dl;PPOS[c+k]-=.5*wl*dl}};
   const bend=(i,j,l,k,tx,ty,tz)=>{const wi=PIM[i],wj=PIM[j],wl=PIM[l],ws=wj+.25*(wi+wl);if(ws===0)return;const a=i*3,b=j*3,c=l*3;
-    const ex=PPOS[b]-.5*(PPOS[a]+PPOS[c])-tx,ey=PPOS[b+1]-.5*(PPOS[a]+PPOS[c])-ty,ez=PPOS[b+2]-.5*(PPOS[a]+PPOS[c])-tz,s=k/ws;
+    const ex=PPOS[b]-.5*(PPOS[a]+PPOS[c])-tx,ey=PPOS[b+1]-.5*(PPOS[a+1]+PPOS[c+1])-ty,ez=PPOS[b+2]-.5*(PPOS[a+2]+PPOS[c+2])-tz,s=k/ws;
     PPOS[b]-=ex*s*wj;PPOS[b+1]-=ey*s*wj;PPOS[b+2]-=ez*s*wj;PPOS[a]+=ex*s*.5*wi;PPOS[a+1]+=ey*s*.5*wi;PPOS[a+2]+=ez*s*.5*wi;PPOS[c]+=ex*s*.5*wl;PPOS[c+1]+=ey*s*.5*wl;PPOS[c+2]+=ez*s*.5*wl};
   const CMi=new THREE.Matrix4(),CMp=new THREE.Matrix4();
   function collide(i,first){if(PIM[i]===0)return;const a=i*3;let x=PPOS[a],y=PPOS[a+1],z=PPOS[a+2],hit=0;
@@ -1327,7 +1327,7 @@ async function build(){
     const e=CMi.elements,lx=e[0]*x+e[4]*y+e[8]*z+e[12],ly=e[1]*x+e[5]*y+e[9]*z+e[13],lz=e[2]*x+e[6]*y+e[10]*z+e[14];
     if(!(lx>-.43&&lx<.43&&ly<.96&&lz>-.45&&lz<.41))return;const d=sdfAt(lx,ly,lz,GR);if(d>=PT*.8)return;const gl=GR.length();if(gl<1e-6)return;
     const m=CM.elements,gx=GR.x/gl,gy=GR.y/gl,gz=GR.z/gl,wx=m[0]*gx+m[4]*gy+m[8]*gz,wy=m[1]*gx+m[5]*gy+m[9]*gz,wz=m[2]*gx+m[6]*gy+m[10]*gz,pen=PT*.8-d,wi=PIM[i],wj=PIM[j],ws=wi+wj;
-    PPOS[a]+=wx*pen*wi/ws*2;PPOS[a+1]+=wy*pen*wi/ws*2;PPOS[a+2]+=wz*pen*wj/ws*2;PPOS[b]+=wx*pen*wj/ws*2;PPOS[b+2]+=wz*pen*wj/ws*2}
+    PPOS[a]+=wx*pen*wi/ws*2;PPOS[a+1]+=wy*pen*wi/ws*2;PPOS[a+2]+=wz*pen*wi/ws*2;PPOS[b]+=wx*pen*wj/ws*2;PPOS[b+1]+=wy*pen*wj/ws*2;PPOS[b+2]+=wz*pen*wj/ws*2}
   const CURL=-DS*DS*.5/3.0;
   const BTA=new Float32Array(NPART),BTC=new Float32Array(NPART);
   { const cr=mulberry32(4242),cn=makeNoise(77);for(let r=0;r<MAXR;r++)for(let c=0;c<NCOL;c++){const i=r*NCOL+c,u=c/(NCOL-1),v=r*DS;
@@ -1369,7 +1369,7 @@ async function build(){
     for(let r=r0;r<n;r++)for(let c=0;c<NCOL;c++){const i=r*NCOL+c;if(!PCF[i]||PIM[i]===0)continue;const a=i*3;
       const nx=PCN[a],ny=PCN[a+1],nz=PCN[a+2],pn=Math.hypot(nx,ny,nz)||1e-9;
       let sx=0,sy=0,sz=0;if(PCF[i]===2){const e=CMi.elements,x=POLD[a],y=POLD[a+1],z=POLD[a+2];V1.set(e[0]*x+e[4]*y+e[8]*z+e[12],e[1]*x+e[5]*y+e[9]*z+e[13],e[2]*x+e[6]*y+e[10]*z+e[14]);V2.copy(V1).applyMatrix4(CM);V3.copy(V1).applyMatrix4(CMp);sx=V2.x-V3.x;sy=V2.y-V3.y;sz=V2.z-V3.z}
-      let dx=PPOS[a]-POLD[a]-sx,dy=PPOS[a+1]-POLD[a+1]-sy,dz=PPOS[a+2]-POLD[a+2]-sz;const ux=nx/pn,uy=ny/pn,uz=nz/nz,dn=dx*ux+dy*uy+dz*uz;dx-=ux*dn;dy-=uy*dn;dz-=uz*dn;
+      let dx=PPOS[a]-POLD[a]-sx,dy=PPOS[a+1]-POLD[a+1]-sy,dz=PPOS[a+2]-POLD[a+2]-sz;const ux=nx/pn,uy=ny/pn,uz=nz/pn,dn=dx*ux+dy*uy+dz*uz;dx-=ux*dn;dy-=uy*dn;dz-=uz*dn;
       const dt=Math.hypot(dx,dy,dz),mu=PCF[i]===1?.8:.9;if(dt<1e-9)continue;const k=dt<mu*pn?1:mu*pn/dt;PPOS[a]-=dx*k;PPOS[a+1]-=dy*k;PPOS[a+2]-=dz*k}
     CMp.copy(CM);
     // the roll pays out paper: when the last segment is long enough it becomes part of the sheet
@@ -1871,10 +1871,10 @@ async function build(){
       if(i<NSX-1)add(k,k+1,span(k,k+1,NDX),1,del);if(j<NSY-1)add(k,k+NSX,span(k,k+NSX,NDY),1,del);
       if(i<NSX-1&&j<NSY-1){const dg=Math.hypot(NDX,NDY);add(k,k+NSX+1,span(k,k+NSX+1,dg),1,del);add(k+1,k+NSX,span(k+1,k+NSX,dg),1,del)}
       // bending: stiff across a facet (paper stays flat, with only the curl it was given round the stone), soft where a crease runs, which stays folded
-      if(i<NSX-2){const c=crossesCrease(RX(k),RY(k),RX(k+2),RY(k+2)),L=2*NDX;
+      if(i<NSX-2){const c=crossesCrease(RX(k),RY(k),RX(k+2)),L=2*NDX;
         if(c)add(k,k+2,L*Math.cos(c.ang/2),.05,del);else{const Rm=.06+2.4*Math.pow(1-u,1.6)+.1*r();add(k,k+2,2*Rm*Math.sin(L/(2*Rm)),1,del)}}
-      if(j<NSY-2){const c=crossesCrease(RX(k),RY(k),RX(k+2*NSX),RY(k+2*NSX)),L=2*NDY;add(k,k+2*NSX,c?L*Math.cos(c.ang/2):L,c?.05:1,del)}
-      if(i<NSX-2&&j<NSY-2){const c=crossesCrease(RX(k),RY(k),RX(k+2*NSX+2),RY(k+2*NSX+2)),L=2*Math.hypot(NDX,NDY);add(k,k+2*NSX+2,c?L*Math.cos(c.ang/2):L,c?.05:.6,del)}
+      if(j<NSY-2){const c=crossesCrease(RX(k),RY(k),RX(k+2*NSX)),L=2*NDY;add(k,k+2*NSX,c?L*Math.cos(c.ang/2):L,c?.05:1,del)}
+      if(i<NSX-2&&j<NSY-2){const c=crossesCrease(RX(k),RY(k),RX(k+2*NSX+2)),L=2*Math.hypot(NDX,NDY);add(k,k+2*NSX+2,c?L*Math.cos(c.ang/2):L,c?.05:.6,del)}
       // paper is stiff: between two creases a facet stays a flat plate (with only its curl), so long braces span every facet; the creases are the hinges
       if(e===0){const Rm=.06+2.4*Math.pow(1-u,1.6),cx=n=>2*Rm*Math.sin(n*NDX/(2*Rm));
         for(const [di,dj] of [[3,0],[0,3],[3,3],[3,-3],[4,1],[1,4],[4,-1],[-1,4]]){const i2=i+di,j2=j+dj;if(i2<0||i2>=NSX||j2<0||j2>=NSY)continue;const m=j2*NSX+i2;
@@ -2042,7 +2042,7 @@ async function build(){
       const fade=strip?Math.max(0,1-py/H)*(Math.min(1,px/60,(W-px)/60)):Math.max(0,1-Math.hypot(px/W-.5,py/H-.5)*2.1);if(fade<=0)continue;
       const g=x.createRadialGradient(px,py,0,px,py,rad),a=.075*fade*(.4+r());g.addColorStop(0,`rgba(96,90,82,${a*1.15})`);g.addColorStop(1,'rgba(96,90,82,0)');x.fillStyle=g;x.fillRect(px-rad,py-rad,rad*2,rad*2)}
     for(let i=0;i<380;i++){const px=r()*W,py=strip?H*Math.pow(r(),2.2):r()*H,f=strip?Math.max(0,1-py/H):Math.max(0,1-Math.hypot(px/W-.5,py/H-.5)*2.1);
-      x.fillStyle=`rgba(${62+r()*50},${58+r()*44},${52+r()*40},${.5*r()*f})`;x.fillRect(px-rad,py-rad,1+r()*1.6,1+r()*1.6)}
+      x.fillStyle=`rgba(${62+r()*50},${58+r()*44},${52+r()*40},${.5*r()*f})`;x.fillRect(px,py,1+r()*1.6,1+r()*1.6)}
     return c}
   const dustDecals=[];
   const addDust=(cx,cz,w,d,yaw,strip,seed)=>{const t=tex(dustTex(seed,strip),{srgb:true});t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
@@ -2072,7 +2072,7 @@ async function build(){
   // a little dust lifted near the floor when the draught gusts
   const fdN=160,fdP=new Float32Array(fdN*3),fdS=[];
   for(let i=0;i<fdN;i++)fdS.push({x:X0+.2+dr()*(RW-.4),z:Z0+.15+dr()*2.6,h:.03+dr()*.4,ph:dr()*6.28});
-  const fdG=new THREE.BufferGeometry();fdG.setAttribute('position',new THREE.BufferAttribute(fdP,3));
+  const fdG=new THREE.BufferGeometry();fdG.setAttribute('position',new THREE.Float32BufferAttribute(fdP,3));
   const floorDust=new THREE.Points(fdG,new THREE.PointsMaterial({size:.0032,map:tex(dotSprite(),{srgb:true}),color:'#5f5a52',transparent:true,opacity:.0,depthWrite:false}));floorDust.frustumCulled=false;scene.add(floorDust);
   function stepDebris(dt){const t=S.time;let moved=false;
     crumbs.forEach((c,i)=>{if(c.s>.012)return;windAt(V.set(c.x,.02,c.z),W);const wm=W.length();
@@ -2099,11 +2099,11 @@ async function build(){
     const rr=mulberry32(Math.floor(S.time*1000)+7),K=13,ang=[];
     for(let i=0;i<K;i++)ang.push((i+.25+.5*rr())/K*Math.PI*2);
     const ray=a=>{const dx=Math.cos(a),dy=Math.sin(a);let tb=1e9;
-      if(dx>1e-6)tb=Math.min(tb,(w/2-cx)/dx);if(dx<-1e-6)tb=Math.min(tb,(-w/2-cx)/dx);if(dy>1e-6)tb=Math.min(tb,(h/2-cy)/dy);if(dy<-1e-6)tb=Math.min(tb,(-w/2-cy)/dy);
+      if(dx>1e-6)tb=Math.min(tb,(w/2-cx)/dx);if(dx<-1e-6)tb=Math.min(tb,(-w/2-cx)/dx);if(dy>1e-6)tb=Math.min(tb,(h/2-cy)/dy);if(dy<-1e-6)tb=Math.min(tb,(-h/2-cy)/dy);
       return {dx,dy,tb}};
     const R=ang.map(a=>{const r=ray(a),f1=.16+.14*rr(),f2=.46+.2*rr();
       return {a,I:[cx+r.dx*r.tb*f1,cy+r.dy*r.tb*f1],M:[cx+r.dx*r.tb*f2,cy+r.dy*r.tb*f2],O:[cx+r.dx*r.tb,cy+r.dy*r.tb],tb:r.tb}});
-    const corners=[[w/2,h/2],[-w/2,h/2],[-w/2,-h/2],[w/2,-h/2]].map(c=>({c,a:(Math.atan2(c[1]-cy,c[0]-cx)+Math.PI*2)%(Math.PI*2)}));
+    const corners=[[w/2,h/2],[-w/2,h/2],[w/2,-h/2],[w/2,-h/2]].map(c=>({c,a:(Math.atan2(c[1]-cy,c[0]-cx)+Math.PI*2)%(Math.PI*2)}));
     const polys=[];
     for(let i=0;i<K;i++){const A=R[i],B=R[(i+1)%K];const a0=A.a,a1=i+1<K?B.a:B.a+Math.PI*2;
       polys.push({pts:[[cx,cy],A.I,B.I],ring:0,r:0});
@@ -2189,7 +2189,7 @@ async function build(){
   const dustN=260,dp=new Float32Array(dustN*3),dseed=new Float32Array(dustN*3),toRoom=toSun.clone().negate();
   for(let i=0;i<dustN;i++){const z=WIN.z0+r()*(WIN.z1-WIN.z0),y=WIN.y0+r()*(WIN.y1-WIN.y0),t=r()*2.2;
     dseed[i*3]=X1+toRoom.x*t;dseed[i*3+1]=y+toRoom.y*t;dseed[i*3+2]=z+toRoom.z*t}
-  const dgeo=new THREE.BufferGeometry();dgeo.setAttribute('position',new THREE.BufferAttribute(dp,3));
+  const dgeo=new THREE.BufferGeometry();dgeo.setAttribute('position',new THREE.Float32BufferAttribute(dp,3));
   const dust=new THREE.Points(dgeo,new THREE.PointsMaterial({size:.008,map:tex(dotSprite(),{srgb:true}),transparent:true,opacity:.4,depthWrite:false,blending:THREE.AdditiveBlending,color:'#fff1d8'}));
   dust.frustumCulled=false;scene.add(dust);
   function moveDust(){const t=S.time;for(let i=0;i<dustN;i++){const a=i*1.37;
@@ -2213,7 +2213,7 @@ async function build(){
     for(let i=0;i<moteN;i++){const o=i*3;V.set(mP[o],mP[o+1],mP[o+2]);windAt(V,W);
       // air drift plus a little turbulence of its own; heavier specks sink faster
       const s=mS[i],tx=W.x*.22+Math.sin(t*.37+i*1.7)*.012,ty=W.y*.22-.0025*s+Math.sin(t*.29+i*2.3)*.008,tz=W.z*.22+Math.cos(t*.31+i*1.1)*.012;
-      mV[o]+=(tx-mV[o])*k;mV[o+1]+=(ty-mV[o])*k;mV[o+2]+=(tz-mV[o])*k;
+      mV[o]+=(tx-mV[o])*k;mV[o+1]+=(ty-mV[o+1])*k;mV[o+2]+=(tz-mV[o+2])*k;
       mP[o]+=mV[o]*dt;mP[o+1]+=mV[o+1]*dt;mP[o+2]+=mV[o+2]*dt;
       if(mP[o+1]<.01||mP[o]<X0+.02||mP[o]>X1-.02||mP[o+2]<Z0+.02||mP[o+2]>Z1-.02||mP[o+1]>RH-.03)moteSpawn(i,false)}
     mG.attributes.position.needsUpdate=true}
@@ -2284,7 +2284,7 @@ async function build(){
           if(Math.abs(l.om)<.02&&Math.abs(tau)<l.fric)l.om=0;else l.om+=(tau-l.fric*Math.sign(l.om||tau))/l.I*hs;
           l.th+=l.om*hs;
           if(l.th>l.max){l.th=l.max;if(l.om>.35){S.shake=Math.max(S.shake,Math.min(.3,l.om*.07));window.dispatchEvent(new CustomEvent('bang',{detail:{strength:l.om}}))}l.om=-l.om*.28}
-          if(l.th<.012){l.th=.012;if(l.om<-.35)window.dispatchEvent(new CustomEvent('bang',{detail:{strength:-l.om*.7}}));l.om=-l.om*.22}
+          if(l.th<.012){l.th=.012;if(l.om<-.35)window.dispatchEvent(new CustomEvent('bang',{detail:{strength:-l.om*.7}));l.om=-l.om*.22}
           l.pressAmt=press}
       }
       l.g.rotation.y=l.rot(l.th);
@@ -2468,7 +2468,7 @@ function filmFade(on,ms){let el=document.getElementById('filmfade');if(!el){el=d
   el.style.transitionDuration=(ms||600)+'ms';el.style.opacity=on?'1':'0'}
 function playFilms(list){if(!list.length)return;DIR.list=list.slice();if(WALK.on)exitWalk();DIR.hooks&&DIR.hooks.start();startFilm(DIR.list.shift())}
 function startFilm(f){DIR.f=f;DIR.st=0;DIR.ev=(f.ev||[]).slice().sort((a,b)=>a[0]-b[0]);DIR.shot=-1;DIR.on=true;DIR.phase='play';flying=null;S.shot=-1;
-  document.body.classList.add('film');controls.enabled=false;flying=null;f.setup(world);filmFade(true,0);requestAnimationFrame(()=>filmFade(false,700))}
+  document.body.classList.add('film');controls.enabled=false;f.setup(world);filmFade(true,0);requestAnimationFrame(()=>filmFade(false,700))}
 function stopFilm(){if(!DIR.on)return;const f=DIR.f;DIR.on=false;DIR.list=[];document.body.classList.remove('film');controls.enabled=true;filmFade(false,300);
   if(f&&f.after)f.after(world);controls.target.copy(DIR.ts);DIR.hooks&&DIR.hooks.end()}
 function dirStep(dt){const f=DIR.f;
@@ -2698,7 +2698,7 @@ build().then(async w=>{
     ISL.dock=best;store.set('room.dock',best);isleLayout()};
   window.addEventListener('pointerup',endDrag);window.addEventListener('pointercancel',endDrag);
   isle.addEventListener('click',e=>{if(suppressClick){e.stopPropagation();e.preventDefault();return}if(ISL.dot){e.stopPropagation();unfold()}},true);
-  function hotCorner(x,y){const R=70,W=innerWidth,H=innerHeight;for(const [c,cx,cy] of [['tl',0,0],['tr',W,H],['bl',0,H],['br',W,H]])if(Math.hypot(x-cx,y-cy)<R)return c;return null}
+  function hotCorner(x,y){const R=70,W=innerWidth,H=innerHeight;for(const [c,cx,cy] of [['tl',0,0],['tr',W,0],['bl',0,H],['br',W,H]])if(Math.hypot(x-cx,y-cy)<R)return c;return null}
 
   secBtns.forEach(b=>b.onclick=()=>openSec(b.dataset.sec));
   canvasEl.addEventListener('pointerdown',()=>{closeSecs();stopTour()});
